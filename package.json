@@ -1,0 +1,15 @@
+{
+  "name": "documay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Documay – scan a QR, send a file. Ephemeral, no-login file transfer.",
+  "workspaces": ["server", "client"],
+  "engines": { "node": ">=18.12" },
+  "scripts": {
+    "dev": "concurrently -n server,client -c green,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:https": "concurrently -n server,client -c green,magenta \"npm run dev -w server\" \"npm run dev:https -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": { "concurrently": "^9.0.0" }
+}
