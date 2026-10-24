@@ -7,8 +7,17 @@ export const ClipIcon = make(<path d="M21 11l-8.5 8.5a5 5 0 01-7-7L14 4a3.5 3.5 
 export const BackIcon = make(<path d="M15 5l-7 7 7 7" />);
 export const CloseIcon = make(<path d="M6 6l12 12M18 6L6 18" />);
 export const DownloadIcon = make(<path d="M12 4v11M7 11l5 5 5-5M5 20h14" />);
+export const UploadIcon = make(<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></>);
 export const RefreshIcon = make(<path d="M20 11a8 8 0 10-2.3 6M20 4v7h-7" />);
 export const CopyIcon = make(<><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 012-2h9" /></>);
+
+export function FileIcon({ kind = 'file', size = 24 }) {
+  return (
+    <span className={`chip k-${kind}`} style={{ width: size, height: size, fontSize: Math.max(9, size * 0.38) }} aria-hidden="true">
+      {kind.slice(0, 3).toUpperCase()}
+    </span>
+  );
+}
 
 export function Logo({ size = 56 }) {
   return (

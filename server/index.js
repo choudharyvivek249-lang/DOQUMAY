@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server } from 'socket.io';
+import { loadAccounts } from './accounts.js';
 import { startCleanup } from './cleanup.js';
 import { CLIENT_ORIGIN, PORT } from './config.js';
 import routes from './routes.js';
@@ -11,9 +12,11 @@ import { registerHandlers } from './socketHandlers.js';
 import { initStorage, wipeStorage } from './storage.js';
 
 await initStorage();
+await loadAccounts();
 
 const app = express();
 app.disable('x-powered-by');
+app.use(express.json());
 app.use('/api', routes);
 
 // In production one process serves both the API and the built React app.

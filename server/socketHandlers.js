@@ -1,10 +1,11 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { getUser, verifyToken } from './accounts.js';
 import {
   ALLOWED_TYPES, CHUNK_MAX_BYTES, FILE_TTL_MS, MAX_ACTIVE_PER_USER, MAX_FILE_BYTES, MAX_STORE_BYTES, QR_TTL_MS,
 } from './config.js';
-import { IN_FLIGHT, qrTokens, rooms, storedBytes, transfers, users } from './state.js';
+import { IN_FLIGHT, onlineAccounts, qrTokens, rooms, storedBytes, transfers, users } from './state.js';
 import { filePath, removeFile } from './storage.js';
 
 const reply = (ack, body) => { if (typeof ack === 'function') ack(body); };
@@ -12,8 +13,39 @@ const cleanName = (s, max) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, 
 const cleanFile = (s) => cleanName(path.basename(String(s ?? '').replace(/\\/g, '/')), 120);
 const fail = (ack, error) => reply(ack, { ok: false, error });
 
-/** Sends the current state of a transfer to both people in the room. */
+/** Sends the current state of a transfer to participants. */
 export function emitUpdate(io, t) {
+  if (t.isDrop) {
+    // Notify sender of progress / completion
+    io.to(t.senderId).emit('transfer:update', {
+      id: t.id,
+      status: t.status,
+      received: t.received,
+      size: t.size,
+      ttlMs: Math.max(0, t.expiresAt - Date.now()),
+      key: t.status === 'ready' ? t.key : undefined,
+    });
+    // If ready, notify recipient online socket(s)
+    if (t.status === 'ready') {
+      const recipientSockets = onlineAccounts.get(t.toUsername);
+      if (recipientSockets) {
+        for (const sockId of recipientSockets) {
+          io.to(sockId).emit('drop:received', {
+            id: t.id,
+            name: t.name,
+            size: t.size,
+            mime: t.mime,
+            senderName: t.senderName,
+            ts: t.createdAt,
+            expiresAt: t.expiresAt,
+            key: t.key,
+          });
+        }
+      }
+    }
+    return;
+  }
+
   io.to(t.senderId).to(t.receiverId).emit('transfer:update', {
     id: t.id,
     status: t.status,
@@ -68,15 +100,37 @@ export function registerHandlers(io) {
 
     const owned = (id, side) => {
       const t = transfers.get(String(id));
+      if (!t) return null;
+      if (t.isDrop) {
+        if (side === 'senderId' && t.senderId === socket.id) return t;
+        if (side === 'receiverId' && me()?.username === t.toUsername) return t;
+        return null;
+      }
       return t && t[side] === socket.id && me()?.roomId === t.roomId ? t : null;
     };
 
     /* ---------- session ---------- */
-    on('session:start', ({ name }, ack) => {
+    on('session:start', ({ name, username, token }, ack) => {
       const clean = cleanName(name, 24);
       if (!clean) return fail(ack, 'Please enter a display name.');
-      users.set(socket.id, { id: socket.id, name: clean, roomId: me()?.roomId ?? null, scans: [] });
-      reply(ack, { ok: true, me: { id: socket.id, name: clean } });
+
+      let verifiedUsername = null;
+      if (username && token && verifyToken(username, token)) {
+        verifiedUsername = username.toLowerCase();
+        if (!onlineAccounts.has(verifiedUsername)) {
+          onlineAccounts.set(verifiedUsername, new Set());
+        }
+        onlineAccounts.get(verifiedUsername).add(socket.id);
+      }
+
+      users.set(socket.id, {
+        id: socket.id,
+        name: clean,
+        username: verifiedUsername,
+        roomId: me()?.roomId ?? null,
+        scans: [],
+      });
+      reply(ack, { ok: true, me: { id: socket.id, name: clean, username: verifiedUsername } });
     }, { needsUser: false });
 
     /* ---------- QR identity ---------- */
@@ -87,13 +141,48 @@ export function registerHandlers(io) {
       reply(ack, { ok: true, token, ttlMs: QR_TTL_MS });
     });
 
-    on('qr:scan', ({ token }, ack) => {
+    on('qr:scan', ({ token, username }, ack) => {
       const user = me();
       const now = Date.now();
       user.scans = user.scans.filter((ts) => now - ts < 60_000);
       if (user.scans.length >= 10) return fail(ack, 'Too many attempts. Wait a minute and try again.');
       user.scans.push(now);
 
+      // Handle permanent QR code (@username)
+      if (username) {
+        const target = getUser(username);
+        if (!target) return fail(ack, 'That permanent QR account does not exist.');
+        const targetKey = target.username.toLowerCase();
+        if (user.username === targetKey) return fail(ack, 'That is your own permanent QR code.');
+
+        const targetSockets = onlineAccounts.get(targetKey);
+        const targetSocketId = targetSockets ? [...targetSockets][0] : null;
+        const owner = targetSocketId ? users.get(targetSocketId) : null;
+
+        if (!owner) {
+          return reply(ack, {
+            ok: false,
+            offline: true,
+            user: { username: target.username, displayName: target.displayName },
+            error: `${target.displayName} is currently offline. You can drop files to their 24/7 Drop-box!`,
+          });
+        }
+
+        leaveRoom(io, user);
+        leaveRoom(io, owner);
+
+        const room = { id: crypto.randomUUID(), members: [user.id, owner.id] };
+        rooms.set(room.id, room);
+        user.roomId = owner.roomId = room.id;
+        io.sockets.sockets.get(user.id)?.join(room.id);
+        io.sockets.sockets.get(owner.id)?.join(room.id);
+
+        io.to(user.id).emit('room:ready', { roomId: room.id, role: 'scanner', peer: { id: owner.id, name: owner.name } });
+        io.to(owner.id).emit('room:ready', { roomId: room.id, role: 'owner', peer: { id: user.id, name: user.name } });
+        return reply(ack, { ok: true });
+      }
+
+      // Handle standard 1-time token QR
       const q = qrTokens.get(String(token));
       if (!q || q.expiresAt <= now) return fail(ack, 'This QR code has expired. Ask them to tap Refresh QR.');
       const owner = users.get(q.ownerId);
@@ -117,7 +206,78 @@ export function registerHandlers(io) {
 
     on('room:leave', () => leaveRoom(io, me()));
 
-    /* ---------- file transfer ---------- */
+    /* ---------- permanent drop-box transfers ---------- */
+    on('drop:offer', async ({ toUsername, name, size, senderName }, ack) => {
+      const user = me();
+      if (!toUsername) return fail(ack, 'Recipient username is required.');
+      const targetUser = getUser(toUsername);
+      if (!targetUser) return fail(ack, 'That user account does not exist.');
+
+      const fileName = cleanFile(name);
+      const ext = fileName.split('.').pop().toLowerCase();
+      if (!fileName.includes('.') || !ALLOWED_TYPES[ext]) {
+        return fail(ack, 'Only photos (PNG, JPG, WEBP), PDF, Word, Excel and PowerPoint files are allowed.');
+      }
+      if (!Number.isInteger(size) || size <= 0) return fail(ack, 'That file looks empty.');
+      if (size > MAX_FILE_BYTES) return fail(ack, 'Files can be up to 100 MB.');
+      if (storedBytes() + size > MAX_STORE_BYTES) return fail(ack, 'The server is busy right now. Try again in a few minutes.');
+
+      const t = {
+        id: crypto.randomUUID(),
+        isDrop: true,
+        toUsername: targetUser.username.toLowerCase(),
+        senderName: cleanName(senderName || user?.name || 'Someone', 24),
+        senderId: socket.id,
+        name: fileName,
+        size,
+        ext,
+        mime: ALLOWED_TYPES[ext],
+        status: 'accepted', // Auto-accepted for drop-box uploads!
+        received: 0,
+        key: crypto.randomBytes(16).toString('hex'),
+        createdAt: Date.now(),
+        expiresAt: Date.now() + FILE_TTL_MS,
+        handle: null,
+        busy: false,
+      };
+      transfers.set(t.id, t);
+      reply(ack, { ok: true, id: t.id, ts: t.createdAt });
+    }, { needsUser: false });
+
+    on('account:get_drops', (_p, ack) => {
+      const user = me();
+      if (!user?.username) return fail(ack, 'You must be logged in.');
+      const now = Date.now();
+      const list = [];
+      for (const t of transfers.values()) {
+        if (t.isDrop && t.toUsername === user.username && t.status === 'ready' && t.expiresAt > now) {
+          list.push({
+            id: t.id,
+            name: t.name,
+            size: t.size,
+            mime: t.mime,
+            senderName: t.senderName,
+            ts: t.createdAt,
+            expiresAt: t.expiresAt,
+            key: t.key,
+          });
+        }
+      }
+      reply(ack, { ok: true, drops: list });
+    });
+
+    on('account:dismiss_drop', async ({ id }, ack) => {
+      const user = me();
+      if (!user?.username) return fail(ack, 'You must be logged in.');
+      const t = transfers.get(String(id));
+      if (t && t.isDrop && t.toUsername === user.username) {
+        await removeFile(t);
+        transfers.delete(t.id);
+      }
+      reply(ack, { ok: true });
+    });
+
+    /* ---------- file transfer (1-to-1 rooms) ---------- */
     on('file:offer', async ({ name, size }, ack) => {
       const user = me();
       const room = rooms.get(user.roomId);
@@ -127,7 +287,9 @@ export function registerHandlers(io) {
 
       const fileName = cleanFile(name);
       const ext = fileName.split('.').pop().toLowerCase();
-      if (!fileName.includes('.') || !ALLOWED_TYPES[ext]) return fail(ack, 'Only photos (PNG, JPG, WEBP), PDF, Word, Excel and PowerPoint files are allowed.');
+      if (!fileName.includes('.') || !ALLOWED_TYPES[ext]) {
+        return fail(ack, 'Only photos (PNG, JPG, WEBP), PDF, Word, Excel and PowerPoint files are allowed.');
+      }
       if (!Number.isInteger(size) || size <= 0) return fail(ack, 'That file looks empty.');
       if (size > MAX_FILE_BYTES) return fail(ack, 'Files can be up to 100 MB.');
       if (storedBytes() + size > MAX_STORE_BYTES) return fail(ack, 'The server is busy right now. Try again in a few minutes.');
@@ -203,7 +365,14 @@ export function registerHandlers(io) {
     socket.on('disconnect', () => {
       const user = me();
       for (const [token, q] of qrTokens) if (q.ownerId === socket.id) qrTokens.delete(token);
-      if (user) leaveRoom(io, user);
+      if (user) {
+        if (user.username && onlineAccounts.has(user.username)) {
+          const set = onlineAccounts.get(user.username);
+          set.delete(socket.id);
+          if (set.size === 0) onlineAccounts.delete(user.username);
+        }
+        leaveRoom(io, user);
+      }
       users.delete(socket.id);
     });
   });

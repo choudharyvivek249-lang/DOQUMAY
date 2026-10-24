@@ -3,6 +3,7 @@ export const users = new Map();     // socket.id -> { id, name, roomId }
 export const qrTokens = new Map();  // token -> { ownerId, expiresAt }
 export const rooms = new Map();     // roomId -> { id, members: [socketId, socketId] }
 export const transfers = new Map(); // transferId -> transfer (see socketHandlers.js)
+export const onlineAccounts = new Map(); // lowercaseUsername -> Set<socket.id>
 
 export const FINAL = new Set(['ready', 'rejected', 'cancelled', 'failed', 'expired']);
 export const IN_FLIGHT = new Set(['offered', 'accepted', 'uploading']);

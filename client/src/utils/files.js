@@ -45,3 +45,30 @@ export function parseToken(text) {
   const m = raw.match(/^(?:documay:)?([A-Za-z0-9_-]{16,64})$/);
   return m ? m[1] : null;
 }
+
+/** Parses either a temporary pairing token or a permanent username scanner code/link */
+export function parseScanTarget(text) {
+  const raw = String(text || '').trim();
+  try {
+    const u = new URL(raw);
+    const to = u.searchParams.get('to') || u.searchParams.get('u') || u.searchParams.get('user');
+    if (to) return { type: 'user', username: to.replace(/^@/, '') };
+    const join = u.searchParams.get('join');
+    if (join) return { type: 'token', token: join };
+  } catch { /* not a full url */ }
+
+  if (raw.startsWith('@')) {
+    return { type: 'user', username: raw.slice(1) };
+  }
+  if (raw.startsWith('user:')) {
+    return { type: 'user', username: raw.slice(5) };
+  }
+  const token = parseToken(raw);
+  if (token) return { type: 'token', token };
+
+  if (/^[a-zA-Z0-9_-]{3,20}$/.test(raw)) {
+    return { type: 'user', username: raw };
+  }
+  return null;
+}
+
