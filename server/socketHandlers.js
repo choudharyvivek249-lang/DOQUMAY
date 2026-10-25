@@ -171,14 +171,35 @@ export function registerHandlers(io) {
         leaveRoom(io, user);
         leaveRoom(io, owner);
 
-        const room = { id: crypto.randomUUID(), members: [user.id, owner.id] };
+        const pin = String(Math.floor(1000 + Math.random() * 9000));
+        const room = {
+          id: crypto.randomUUID(),
+          members: [user.id, owner.id],
+          hostId: owner.id,
+          pin,
+          verified: false,
+        };
         rooms.set(room.id, room);
         user.roomId = owner.roomId = room.id;
         io.sockets.sockets.get(user.id)?.join(room.id);
         io.sockets.sockets.get(owner.id)?.join(room.id);
 
-        io.to(user.id).emit('room:ready', { roomId: room.id, role: 'scanner', peer: { id: owner.id, name: owner.name } });
-        io.to(owner.id).emit('room:ready', { roomId: room.id, role: 'owner', peer: { id: user.id, name: user.name } });
+        io.to(user.id).emit('room:ready', {
+          roomId: room.id,
+          role: 'scanner',
+          peer: { id: owner.id, name: owner.name },
+          pin: null,
+          isHost: false,
+          verified: false,
+        });
+        io.to(owner.id).emit('room:ready', {
+          roomId: room.id,
+          role: 'owner',
+          peer: { id: user.id, name: user.name },
+          pin,
+          isHost: true,
+          verified: false,
+        });
         return reply(ack, { ok: true });
       }
 
@@ -193,15 +214,59 @@ export function registerHandlers(io) {
       leaveRoom(io, user);
       leaveRoom(io, owner);
 
-      const room = { id: crypto.randomUUID(), members: [user.id, owner.id] };
+      const pin = String(Math.floor(1000 + Math.random() * 9000));
+      const room = {
+        id: crypto.randomUUID(),
+        members: [user.id, owner.id],
+        hostId: owner.id,
+        pin,
+        verified: false,
+      };
       rooms.set(room.id, room);
       user.roomId = owner.roomId = room.id;
       io.sockets.sockets.get(user.id)?.join(room.id);
       io.sockets.sockets.get(owner.id)?.join(room.id);
 
-      io.to(user.id).emit('room:ready', { roomId: room.id, role: 'scanner', peer: { id: owner.id, name: owner.name } });
-      io.to(owner.id).emit('room:ready', { roomId: room.id, role: 'owner', peer: { id: user.id, name: user.name } });
+      io.to(user.id).emit('room:ready', {
+        roomId: room.id,
+        role: 'scanner',
+        peer: { id: owner.id, name: owner.name },
+        pin: null,
+        isHost: false,
+        verified: false,
+      });
+      io.to(owner.id).emit('room:ready', {
+        roomId: room.id,
+        role: 'owner',
+        peer: { id: user.id, name: user.name },
+        pin,
+        isHost: true,
+        verified: false,
+      });
       reply(ack, { ok: true });
+    });
+
+    on('room:verify_pin', ({ pin }, ack) => {
+      const user = me();
+      const room = rooms.get(user?.roomId);
+      if (!room) return fail(ack, 'Not in a transfer room.');
+      if (room.verified) return reply(ack, { ok: true, verified: true });
+      if (String(pin || '').trim() !== String(room.pin).trim()) {
+        return fail(ack, 'Incorrect 4-digit PIN. Please check the code on the other device.');
+      }
+      room.verified = true;
+      io.to(room.id).emit('room:verified', { roomId: room.id, verified: true });
+      reply(ack, { ok: true, verified: true });
+    });
+
+    on('room:authorize_host', (_p, ack) => {
+      const user = me();
+      const room = rooms.get(user?.roomId);
+      if (!room) return fail(ack, 'Not in a transfer room.');
+      if (room.hostId !== user.id) return fail(ack, 'Only the host device can authorize.');
+      room.verified = true;
+      io.to(room.id).emit('room:verified', { roomId: room.id, verified: true });
+      reply(ack, { ok: true, verified: true });
     });
 
     on('room:leave', () => leaveRoom(io, me()));
@@ -282,6 +347,7 @@ export function registerHandlers(io) {
       const user = me();
       const room = rooms.get(user.roomId);
       if (!room) return fail(ack, 'Connect with someone first by scanning a QR code.');
+      if (room.pin && !room.verified) return fail(ack, 'Please verify the 4-digit security PIN before sharing files.');
       const receiverId = room.members.find((id) => id !== user.id);
       if (!receiverId || !users.has(receiverId)) return fail(ack, 'The other person is no longer connected.');
 

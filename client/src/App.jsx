@@ -148,21 +148,29 @@ export default function App() {
             onBack={dm.leave}
             onSend={dm.sendFiles}
             onCancel={dm.cancel}
+            onVerifyPin={dm.verifyPin}
+            onAuthorizeHost={dm.authorizeHost}
           />
-        ) : account && viewMode === 'whatsapp' ? (
+        ) : name && viewMode === 'whatsapp' ? (
           <WhatsAppHub
             key="whatsapp"
             account={account}
+            guestName={!account ? name : null}
             connected={dm.connected}
             drops={dm.drops}
             onDismissDrop={dm.dismissDrop}
             onScan={() => setOverlay('scan')}
-            onPermanentQr={() => setOverlay('permQr')}
+            onPermanentQr={() => {
+              if (account) setOverlay('permQr');
+              else setOverlay('auth');
+            }}
             onMyQr={() => setOverlay('qr')}
             onOpenDropModal={(target) => {
               setDropTarget(target);
               setOverlay('drop');
             }}
+            onAuth={() => setOverlay('auth')}
+            onChangeName={handleChangeName}
             onLogout={handleLogout}
             onToggleClassic={toggleViewMode}
             notify={notify}

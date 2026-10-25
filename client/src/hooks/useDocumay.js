@@ -130,13 +130,28 @@ export function useDocumay(name, notify, account) {
     });
     socket.on('connect_error', () => notifyRef.current('Can’t reach the DoquMay server.'));
 
-    socket.on('room:ready', ({ roomId, peer, role }) => {
+    socket.on('room:ready', ({ roomId, peer, role, pin, isHost, verified }) => {
       files.current.clear();
       stopped.current.clear();
       setItems([]);
       setQr(null);
-      setRoom({ id: roomId, peer, role, peerOnline: true });
+      setRoom({
+        id: roomId,
+        peer,
+        role,
+        pin: pin || null,
+        isHost: Boolean(isHost),
+        verified: Boolean(verified),
+        peerOnline: true,
+      });
     });
+
+    socket.on('room:verified', ({ roomId }) => {
+      playNotificationSound();
+      notifyRef.current('🛡️ Device security verified! Safe file transfer unlocked.');
+      setRoom((r) => (r && r.id === roomId ? { ...r, verified: true } : r));
+    });
+
     socket.on('peer:left', ({ roomId }) => setRoom((r) => (r && r.id === roomId ? { ...r, peerOnline: false } : r)));
 
     socket.on('file:incoming', ({ id, name: fileName, size, ts, from }) => {
@@ -228,14 +243,27 @@ export function useDocumay(name, notify, account) {
     await call('file:cancel', { id });
   }, [call]);
 
-  const leave = useCallback(() => {
-    call('room:leave');
-    files.current.clear();
-    setRoom(null); setItems([]);
+  const verifyPin = useCallback(async (pin) => {
+    const res = await call('room:verify_pin', { pin });
+    if (!res.ok) {
+      notifyRef.current(res.error || 'Incorrect 4-digit PIN.');
+      return { ok: false, error: res.error };
+    }
+    return { ok: true };
+  }, [call]);
+
+  const authorizeHost = useCallback(async () => {
+    const res = await call('room:authorize_host');
+    if (!res.ok) {
+      notifyRef.current(res.error || 'Could not authorize.');
+      return { ok: false, error: res.error };
+    }
+    return { ok: true };
   }, [call]);
 
   return {
     connected, room, items, dropItems, drops, qr,
     createQr, scan, sendFiles, sendDrop, dismissDrop, fetchDrops, respond, cancel, leave,
+    verifyPin, authorizeHost,
   };
 }

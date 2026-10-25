@@ -95,10 +95,12 @@ function FileMessageBubble({ drop, onDismiss, onPreviewImage }) {
 }
 
 /**
- * Full WhatsApp interface for permanent users to see multiple file senders
+ * WhatsApp interface for both Permanent accounts and Guest accounts.
+ * Note: Guest accounts DO NOT have a permanent QR code (only temporary 2-minute QR and option to claim standee).
  */
 export default function WhatsAppHub({
   account,
+  guestName,
   connected,
   drops = [],
   onDismissDrop,
@@ -106,6 +108,8 @@ export default function WhatsAppHub({
   onPermanentQr,
   onMyQr,
   onOpenDropModal,
+  onAuth,
+  onChangeName,
   onLogout,
   onToggleClassic,
   notify,
@@ -114,6 +118,10 @@ export default function WhatsAppHub({
   const [searchQuery, setSearchQuery] = useState('');
   const [previewDrop, setPreviewDrop] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
+
+  const isGuest = !account;
+  const myDisplayName = account ? (account.displayName || account.username) : (guestName || 'Guest User');
+  const myUsernameTag = account ? `@${account.username}` : 'Guest Mode';
 
   // Group all drops by senderName (e.g. "Alice", "Bob", "John")
   const senderGroups = useMemo(() => {
@@ -197,6 +205,11 @@ export default function WhatsAppHub({
   };
 
   const handleCopyLink = () => {
+    if (isGuest) {
+      notify('Register a permanent account to get your personalized link & standee!');
+      onAuth?.();
+      return;
+    }
     const link = `${window.location.origin}/?to=${account.username}`;
     navigator.clipboard.writeText(link);
     notify(`Copied personal Drop-box link: @${account.username}`);
@@ -231,66 +244,126 @@ export default function WhatsAppHub({
               <div className="wa-profile-body">
                 {/* Large Profile Avatar */}
                 <div className="wa-profile-avatar-wrap">
-                  <Avatar name={account.displayName || account.username} size={110} />
+                  <Avatar name={myDisplayName} size={110} />
                 </div>
 
                 {/* Display Name Section */}
                 <div className="wa-profile-section">
                   <span className="wa-profile-label">Your Name</span>
-                  <b className="wa-profile-val">{account.displayName || account.username}</b>
+                  <b className="wa-profile-val">{myDisplayName}</b>
                   <span className="wa-profile-caption">
-                    This is your public display name shown to file senders.
+                    {isGuest
+                      ? 'Temporary guest display name for this device session.'
+                      : 'This is your public display name shown to file senders.'}
                   </span>
                 </div>
 
-                {/* Username Section */}
+                {/* Account / Username Section */}
                 <div className="wa-profile-section">
-                  <span className="wa-profile-label">Username</span>
-                  <b className="wa-profile-val">@{account.username}</b>
-                  <span className="wa-profile-status-badge">
+                  <span className="wa-profile-label">Account Status</span>
+                  <b className="wa-profile-val">{myUsernameTag}</b>
+                  <span className={`wa-profile-status-badge ${isGuest ? 'guest' : ''}`}>
                     <span className={`wa-status-dot ${connected ? 'online' : ''}`} />
-                    {connected ? 'Active & Receiving Files 24/7' : 'Connecting…'}
+                    {connected
+                      ? isGuest
+                        ? 'Guest Session · Live & Ready'
+                        : 'Permanent Account · Receiving 24/7'
+                      : 'Connecting…'}
                   </span>
                 </div>
 
-                {/* Permanent Drop-box Link & Share (Moved here from the main sidebar!) */}
-                <div className="wa-profile-section wa-profile-drop-section">
-                  <div className="wa-share-badge">
-                    <span className="wa-pulse-dot" /> Permanent Drop-box Active
-                  </div>
-                  <p className="wa-share-desc">
-                    Anyone can scan your permanent QR code or visit your link to drop files directly into your WhatsApp Hub:
-                  </p>
+                {/* Permanent vs Guest Action Card */}
+                {!isGuest ? (
+                  <div className="wa-profile-section wa-profile-drop-section">
+                    <div className="wa-share-badge">
+                      <span className="wa-pulse-dot" /> Permanent Drop-box Active
+                    </div>
+                    <p className="wa-share-desc">
+                      Anyone can scan your permanent QR standee or visit your link to drop files directly into your WhatsApp Hub:
+                    </p>
 
-                  <div className="wa-share-pill" onClick={handleCopyLink} title="Click to copy link">
-                    <code>{window.location.host}/?to={account.username}</code>
-                    <button type="button" className="wa-share-copy-btn" aria-label="Copy link">
-                      <CopyIcon width={15} height={15} />
-                    </button>
-                  </div>
+                    <div className="wa-share-pill" onClick={handleCopyLink} title="Click to copy link">
+                      <code>{window.location.host}/?to={account.username}</code>
+                      <button type="button" className="wa-share-copy-btn" aria-label="Copy link">
+                        <CopyIcon width={15} height={15} />
+                      </button>
+                    </div>
 
-                  <div className="wa-profile-actions">
-                    <button
-                      type="button"
-                      className="wa-profile-btn primary"
-                      onClick={() => {
-                        setShowProfile(false);
-                        onPermanentQr();
-                      }}
-                    >
-                      <QrIcon width={16} height={16} /> Show QR Code
-                    </button>
-                    <button
-                      type="button"
-                      className="wa-profile-btn"
-                      onClick={handleCopyLink}
-                    >
-                      <CopyIcon width={15} height={15} /> Copy Link
-                    </button>
+                    <div className="wa-profile-actions">
+                      <button
+                        type="button"
+                        className="wa-profile-btn primary"
+                        onClick={() => {
+                          setShowProfile(false);
+                          onPermanentQr?.();
+                        }}
+                      >
+                        <QrIcon width={16} height={16} /> Show Standee QR
+                      </button>
+                      <button
+                        type="button"
+                        className="wa-profile-btn"
+                        onClick={handleCopyLink}
+                      >
+                        <CopyIcon width={15} height={15} /> Copy Link
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="wa-profile-section wa-profile-drop-section wa-guest-promo-box">
+                    <div className="wa-share-badge promo">
+                      <span className="wa-pulse-dot" /> Guest Session (No Permanent QR)
+                    </div>
+                    <p className="wa-share-desc">
+                      Guest accounts don't have a permanent QR code. You can use 2-minute temporary QR codes or claim your free permanent standee:
+                    </p>
 
-                {/* Actions: View toggle & Logout */}
+                    <div className="wa-guest-action-card">
+                      <div className="wa-guest-promo-head">
+                        <span className="wa-sparkle-icon">✨</span>
+                        <div>
+                          <b>Claim Permanent Desk Standee</b>
+                          <p>Get a permanent anime QR standee, custom @handle, and permanent WhatsApp inbox!</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="wa-profile-btn primary"
+                        onClick={() => {
+                          setShowProfile(false);
+                          onAuth?.();
+                        }}
+                      >
+                        ✨ Get Permanent Standee
+                      </button>
+                    </div>
+
+                    <div className="wa-profile-actions" style={{ marginTop: '12px' }}>
+                      <button
+                        type="button"
+                        className="wa-profile-btn"
+                        onClick={() => {
+                          setShowProfile(false);
+                          onMyQr?.();
+                        }}
+                      >
+                        <QrIcon width={16} height={16} /> Temporary 2m QR
+                      </button>
+                      <button
+                        type="button"
+                        className="wa-profile-btn"
+                        onClick={() => {
+                          setShowProfile(false);
+                          onScan?.();
+                        }}
+                      >
+                        <ScanIcon width={16} height={16} /> Scan Camera
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions: View toggle & Logout/Exit */}
                 <div className="wa-profile-section">
                   <div className="wa-profile-bottom-actions">
                     <button
@@ -298,18 +371,31 @@ export default function WhatsAppHub({
                       className="wa-profile-link-btn"
                       onClick={() => {
                         setShowProfile(false);
-                        onToggleClassic();
+                        onToggleClassic?.();
                       }}
                     >
                       📱 Switch to Simple View
                     </button>
-                    <button
-                      type="button"
-                      className="wa-profile-link-btn danger"
-                      onClick={onLogout}
-                    >
-                      🚪 Log Out of @{account.username}
-                    </button>
+                    {!isGuest ? (
+                      <button
+                        type="button"
+                        className="wa-profile-link-btn danger"
+                        onClick={onLogout}
+                      >
+                        🚪 Log Out of @{account.username}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="wa-profile-link-btn danger"
+                        onClick={() => {
+                          setShowProfile(false);
+                          onChangeName?.();
+                        }}
+                      >
+                        🚪 Exit Guest Session / Change Name
+                      </button>
+                    )}
                   </div>
                   <p className="fine" style={{ marginTop: '12px' }}>
                     🔒 Files sent to your WhatsApp Hub auto-delete 10 minutes after delivery.
@@ -325,21 +411,22 @@ export default function WhatsAppHub({
           <div
             className="wa-user-profile clickable"
             onClick={() => setShowProfile(true)}
-            title="Click to view Profile & Permanent Drop-box Link"
+            title="Click to view Profile"
             role="button"
             tabIndex={0}
           >
-            <Avatar name={account.displayName || account.username} size={42} />
+            <Avatar name={myDisplayName} size={42} />
             <div className="wa-user-text">
-              <span className="wa-user-name">{account.displayName || account.username}</span>
+              <span className="wa-user-name">{myDisplayName}</span>
               <span className="wa-user-tag">
                 <span className={`wa-status-dot ${connected ? 'online' : ''}`} />
-                @{account.username}
+                {myUsernameTag}
               </span>
             </div>
           </div>
 
           <div className="wa-header-actions">
+            {/* Camera Scan QR */}
             <button
               type="button"
               className="wa-icon-action"
@@ -350,16 +437,46 @@ export default function WhatsAppHub({
             >
               <ScanIcon width={20} height={20} />
             </button>
-            <button
-              type="button"
-              className="wa-icon-action highlight"
-              onClick={onPermanentQr}
-              disabled={!connected}
-              title="My Permanent QR Code"
-              aria-label="Permanent QR Code"
-            >
-              <QrIcon width={20} height={20} />
-            </button>
+
+            {/* Permanent QR button ONLY for permanent accounts; Temporary QR for guests */}
+            {!isGuest ? (
+              <button
+                type="button"
+                className="wa-icon-action highlight"
+                onClick={onPermanentQr}
+                disabled={!connected}
+                title="My Permanent QR Code"
+                aria-label="Permanent QR Code"
+              >
+                <QrIcon width={20} height={20} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="wa-icon-action highlight"
+                onClick={onMyQr}
+                disabled={!connected}
+                title="Temporary 2-min QR Code"
+                aria-label="Temporary QR Code"
+              >
+                <QrIcon width={20} height={20} />
+              </button>
+            )}
+
+            {/* Claim standee button for guests */}
+            {isGuest && (
+              <button
+                type="button"
+                className="wa-icon-action promo-star"
+                onClick={onAuth}
+                title="Get Permanent Standee"
+                aria-label="Get Permanent Standee"
+              >
+                ✨
+              </button>
+            )}
+
+            {/* Profile Drawer */}
             <button
               type="button"
               className="wa-icon-action"
@@ -369,12 +486,14 @@ export default function WhatsAppHub({
             >
               👤
             </button>
+
+            {/* Exit/Logout */}
             <button
               type="button"
               className="wa-icon-action"
-              onClick={onLogout}
-              title="Log out"
-              aria-label="Log out"
+              onClick={!isGuest ? onLogout : onChangeName}
+              title={!isGuest ? 'Log out' : 'Exit Guest Session'}
+              aria-label={!isGuest ? 'Log out' : 'Exit Guest Session'}
             >
               🚪
             </button>
@@ -410,18 +529,35 @@ export default function WhatsAppHub({
           {senderGroups.length === 0 ? (
             <div className="wa-chats-empty">
               <div className="wa-empty-icon">📥</div>
-              <h3>No Senders Yet</h3>
+              <h3>No Transfers Yet</h3>
               <p>
-                When someone scans your permanent QR code or opens your link, their files will appear
-                here organized into sender conversations just like WhatsApp!
+                {!isGuest
+                  ? 'When someone scans your permanent QR code or opens your link, their files will appear here organized into sender conversations!'
+                  : 'When someone shares documents with you via QR code or live transfer, they will appear here organized into conversations!'}
               </p>
               <div className="wa-empty-actions">
-                <button type="button" className="wa-btn-primary" onClick={onPermanentQr}>
-                  ✨ Show Permanent QR
-                </button>
-                <button type="button" className="wa-btn-ghost" onClick={handleCopyLink}>
-                  Copy Link
-                </button>
+                {!isGuest ? (
+                  <>
+                    <button type="button" className="wa-btn-primary" onClick={onPermanentQr}>
+                      ✨ Show Standee QR
+                    </button>
+                    <button type="button" className="wa-btn-ghost" onClick={handleCopyLink}>
+                      Copy Link
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="wa-btn-primary" onClick={onMyQr}>
+                      ⚡ Share Temporary QR
+                    </button>
+                    <button type="button" className="wa-btn-ghost" onClick={onScan}>
+                      📸 Scan QR
+                    </button>
+                    <button type="button" className="wa-btn-ghost highlight" onClick={onAuth}>
+                      ✨ Get Permanent Standee
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ) : filteredSenders.length === 0 ? (
@@ -493,12 +629,20 @@ export default function WhatsAppHub({
                   <b className="wa-sender-title">{activeGroup.name}</b>
                   <span className="wa-sender-status">
                     ● {activeGroup.drops.length} file{activeGroup.drops.length > 1 ? 's' : ''} ·{' '}
-                    {formatSize(activeGroup.totalBytes)} total
+                    {formatSize(activeGroup.totalBytes)} total · ↔ Bidirectional
                   </span>
                 </div>
               </div>
 
               <div className="wa-chat-header-actions">
+                <button
+                  type="button"
+                  className="wa-btn-header-action reply-action"
+                  onClick={() => onOpenDropModal?.(activeGroup.name)}
+                  title={`Send files to ${activeGroup.name}`}
+                >
+                  <span>📤 Send Files</span>
+                </button>
                 <button
                   type="button"
                   className="wa-btn-header-action"
@@ -524,8 +668,7 @@ export default function WhatsAppHub({
               <div className="wa-date-pill">TODAY</div>
 
               <div className="wa-encryption-notice">
-                🔒 Files sent to your Permanent Drop-box are end-to-end streamed and automatically
-                wiped from the server 10 minutes after upload.
+                🔒 Protected by 4-digit security &amp; end-to-end streaming. Files auto-delete from the server 10 minutes after upload.
               </div>
 
               <div className="wa-bubbles-list">
@@ -544,7 +687,7 @@ export default function WhatsAppHub({
             <footer className="wa-chat-footer">
               <div className="wa-footer-left">
                 <span className="wa-footer-info">
-                  Receiving files from <b>{activeGroup.name}</b>
+                  Sharing documents with <b>{activeGroup.name}</b>
                 </span>
               </div>
               <div className="wa-footer-actions">
@@ -555,13 +698,34 @@ export default function WhatsAppHub({
                 >
                   <DownloadIcon width={16} height={16} /> Save All
                 </button>
+
+                {/* Bidirectional sending: send files back to this user */}
                 <button
                   type="button"
-                  className="wa-footer-btn primary"
-                  onClick={onPermanentQr}
+                  className="wa-footer-btn reply-btn"
+                  onClick={() => onOpenDropModal?.(activeGroup.name)}
+                  title={`Send files back to ${activeGroup.name}`}
                 >
-                  ✨ Share My QR
+                  📤 Send Files Back
                 </button>
+
+                {!isGuest ? (
+                  <button
+                    type="button"
+                    className="wa-footer-btn primary"
+                    onClick={onPermanentQr}
+                  >
+                    ✨ Standee QR
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="wa-footer-btn primary"
+                    onClick={onMyQr}
+                  >
+                    ⚡ Share 2m QR
+                  </button>
+                )}
               </div>
             </footer>
           </div>
@@ -573,32 +737,55 @@ export default function WhatsAppHub({
                 <span className="wa-big-icon">💬</span>
                 <span className="wa-sub-icon">⚡</span>
               </div>
-              <h2>DoquMay Permanent Hub</h2>
+              <h2>DoquMay {!isGuest ? 'Permanent Hub' : 'Guest Hub'}</h2>
               <p className="wa-placeholder-desc">
-                View, manage, and download incoming files from multiple senders simultaneously with a
-                WhatsApp-style conversation interface.
+                {!isGuest
+                  ? 'Manage and download incoming files from multiple senders with a WhatsApp-style conversation interface.'
+                  : 'Transfer files bidirectionally with zero login required. You can send and receive files with both permanent and guest users.'}
               </p>
 
               <div className="wa-placeholder-cards">
-                <div className="wa-ph-card" onClick={onPermanentQr}>
-                  <div className="wa-ph-icon">🔲</div>
-                  <b>Permanent QR Code</b>
-                  <span>Print or display on your desk or storefront for zero-login file drops.</span>
-                </div>
-                <div className="wa-ph-card" onClick={handleCopyLink}>
-                  <div className="wa-ph-icon">🔗</div>
-                  <b>Shareable Link</b>
-                  <span>Copy your personalized link: <code>{(typeof window !== 'undefined' ? window.location.host : 'documay.com')}/?to={account.username}</code></span>
-                </div>
-                <div className="wa-ph-card" onClick={onScan}>
-                  <div className="wa-ph-icon">📸</div>
-                  <b>Live Scanner</b>
-                  <span>Point camera at any QR code to connect and transfer in real-time.</span>
-                </div>
+                {!isGuest ? (
+                  <>
+                    <div className="wa-ph-card" onClick={onPermanentQr}>
+                      <div className="wa-ph-icon">🔲</div>
+                      <b>Permanent Standee QR</b>
+                      <span>Print or display on your desk or shop for zero-login file drops.</span>
+                    </div>
+                    <div className="wa-ph-card" onClick={handleCopyLink}>
+                      <div className="wa-ph-icon">🔗</div>
+                      <b>Shareable Link</b>
+                      <span>Copy your personalized link: <code>{window.location.host}/?to={account?.username}</code></span>
+                    </div>
+                    <div className="wa-ph-card" onClick={onScan}>
+                      <div className="wa-ph-icon">📸</div>
+                      <b>Live Camera Scanner</b>
+                      <span>Point camera at any QR code to connect and transfer with 4-digit PIN safety.</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="wa-ph-card" onClick={onMyQr}>
+                      <div className="wa-ph-icon">⚡</div>
+                      <b>Temporary 2-min QR</b>
+                      <span>Generate a fast one-time QR code to pair with any nearby phone or laptop.</span>
+                    </div>
+                    <div className="wa-ph-card" onClick={onScan}>
+                      <div className="wa-ph-icon">📸</div>
+                      <b>Live Camera Scanner</b>
+                      <span>Point camera at any QR code or standee to connect and transfer files.</span>
+                    </div>
+                    <div className="wa-ph-card promo" onClick={onAuth}>
+                      <div className="wa-ph-icon">✨</div>
+                      <b>Get Permanent Standee</b>
+                      <span>Register a free account to get an artistic desk QR standee and custom link.</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="wa-placeholder-footer">
-                <span>🔒 End-to-end encrypted · Auto-deletes in 10 minutes</span>
+                <span>🛡️ 4-digit PIN security · End-to-end encrypted · Auto-deletes in 10 minutes</span>
               </div>
             </div>
           </div>

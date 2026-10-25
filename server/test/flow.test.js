@@ -38,7 +38,11 @@ try {
   const exp = await emit(priya, 'qr:scan', { token: t2 });
   assert.equal(exp.ok, false); assert.match(exp.error, /expired/); ok('QR expires after its TTL');
 
-  // --- rules
+  // --- rules & 4-digit PIN security
+  assert.equal((await emit(priya, 'file:offer', { name: 'Report.pdf', size: 100 })).ok, false); ok('rejects file before 4-digit PIN verified');
+  assert.equal((await emit(priya, 'room:verify_pin', { pin: '0000' })).ok, false); ok('rejects wrong 4-digit PIN');
+  assert.equal((await emit(priya, 'room:verify_pin', { pin: r1.pin })).ok, true); ok('accepts correct 4-digit PIN and unlocks transfer');
+
   assert.equal((await emit(priya, 'file:offer', { name: 'virus.exe', size: 10 })).ok, false); ok('rejects .exe');
   assert.equal((await emit(priya, 'file:offer', { name: 'big.pdf', size: 100 * 1024 * 1024 + 1 })).ok, false); ok('rejects > 100 MB');
 
