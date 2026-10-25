@@ -46,7 +46,7 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
       onClick={onClose}
     >
       <motion.section
-        className="sheet hero-qr-sheet"
+        className="sheet hero-qr-sheet soft-theme"
         role="dialog"
         aria-modal="true"
         aria-label="DoquMay QR Code"
@@ -60,15 +60,15 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
           <CloseIcon />
         </button>
 
-        {/* Global DoquMay Tagline Banner */}
-        <div className="doqumay-tagline-badge">
+        {/* Global DoquMay Tagline Banner (Soft Shades) */}
+        <div className="doqumay-tagline-badge soft">
           <span className="sparkle-icon">⚡</span>
           <span className="tagline-text">WORLD’S 1ST FASTEST &amp; EASIEST DOCUMENT SENDER</span>
           <span className="sparkle-icon">⚡</span>
         </div>
 
-        {/* Pay-App Standee Header */}
-        <div className="standee-header">
+        {/* Pay-App Standee Header (Soft Shades) */}
+        <div className="standee-header soft">
           <DoquMayLogo size={42} showTagline={false} />
           <div className="standee-title-wrap">
             <h2 className="brand-h2">
@@ -82,54 +82,74 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
           </div>
         </div>
 
-        {/* Surprise Superhero / Anime Collectible Card */}
+        {/* Surprise Superhero / Anime Collectible Card (Soft Pastel Palette) */}
         <AnimatePresence mode="wait">
           {cardRevealed && (
             <motion.div
               key={hero.id}
-              className="surprise-hero-card"
+              className="surprise-hero-card soft"
               style={{
                 background: hero.theme.cardBg,
-                borderColor: hero.theme.primary,
-                boxShadow: `0 8px 32px ${hero.theme.glow}`,
+                borderColor: hero.theme.cardBorder,
+                boxShadow: `0 8px 30px ${hero.theme.glow}`,
               }}
-              initial={{ scale: 0.92, opacity: 0, rotateY: 15 }}
-              animate={{ scale: 1, opacity: 1, rotateY: 0 }}
-              exit={{ scale: 0.92, opacity: 0, rotateY: -15 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 260 }}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 280 }}
             >
               {/* Card Top: Superhero info & Rarity */}
-              <div className="hero-card-header" style={{ borderBottomColor: `${hero.theme.primary}44` }}>
-                <div className="hero-avatar-badge" style={{ background: hero.theme.gradient }}>
-                  <span className="hero-emoji">{hero.avatar}</span>
+              <div className="hero-card-header soft" style={{ borderBottomColor: hero.theme.cardBorder }}>
+                <div className="hero-avatar-wrap">
+                  {hero.image ? (
+                    <img src={hero.image} alt={hero.name} className="hero-portrait-img" />
+                  ) : (
+                    <div className="hero-avatar-badge soft" style={{ background: hero.theme.tagBg }}>
+                      <span className="hero-emoji">{hero.avatar}</span>
+                    </div>
+                  )}
                 </div>
+
                 <div className="hero-meta">
                   <div className="hero-rarity-row">
-                    <span className="hero-rarity-badge" style={{ color: hero.rarityColor, borderColor: hero.rarityColor }}>
+                    <span
+                      className="hero-rarity-badge soft"
+                      style={{ color: hero.theme.primary, borderColor: hero.theme.cardBorder, background: hero.theme.tagBg }}
+                    >
                       {hero.rarity}
                     </span>
                     <span className="hero-universe-tag">{hero.universe}</span>
                   </div>
-                  <b className="hero-name">{hero.name}</b>
-                  <span className="hero-card-title">{hero.cardTitle}</span>
+                  <b className="hero-name soft">{hero.name}</b>
+                  <span className="hero-card-title soft">{hero.cardTitle}</span>
                 </div>
+
                 <button
                   type="button"
-                  className="hero-reroll-btn"
+                  className="hero-reroll-btn soft"
                   onClick={handleRerollHero}
                   title="Draw another surprise character card!"
                 >
-                  🎲 <span className="reroll-label">Reroll Hero</span>
+                  🎲 <span className="reroll-label">Change Anime Art</span>
                 </button>
               </div>
 
               {/* Character Catchphrase */}
-              <p className="hero-quote" style={{ borderLeftColor: hero.theme.primary }}>
+              <p className="hero-quote soft" style={{ borderLeftColor: hero.theme.primary, background: '#FFFFFF' }}>
                 {hero.quote}
               </p>
 
-              {/* QR Code Container with Center DoquMay Logo */}
-              <div className={`qr-box hero-qr-box ${expired ? 'dead' : ''}`} style={{ borderColor: hero.theme.primary }}>
+              {/* QR Code Container with Crisp Clean Scannable QR and Anime Corner Accents */}
+              <div
+                className={`qr-box hero-qr-box soft ${expired ? 'dead' : ''}`}
+                style={{ borderColor: hero.theme.qrBorder }}
+              >
+                {/* Anime Art Corner Finder Eyes */}
+                <span className="anime-qr-corner tl" style={{ borderColor: hero.theme.primary }} />
+                <span className="anime-qr-corner tr" style={{ borderColor: hero.theme.primary }} />
+                <span className="anime-qr-corner bl" style={{ borderColor: hero.theme.primary }} />
+                <span className="anime-qr-corner br" style={{ borderColor: hero.theme.primary }} />
+
                 {qr ? (
                   <div className="qr-inner-wrapper">
                     <QRCodeSVG
@@ -137,8 +157,9 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
                       size={210}
                       level="H"
                       bgColor="#ffffff"
-                      fgColor="#111111"
+                      fgColor="#0f172a"
                       marginSize={2}
+                      className="main-qr-svg"
                       imageSettings={{
                         src: DOQUMAY_QR_LOGO_DATA_URI,
                         height: 44,
@@ -146,10 +167,6 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
                         excavate: true,
                       }}
                     />
-                    {/* Glowing overlay logo for 100% crisp visual pop */}
-                    <div className="qr-center-logo-overlay">
-                      <DoquMayLogo size={34} />
-                    </div>
                   </div>
                 ) : (
                   <div className="qr-skeleton" />
@@ -164,18 +181,18 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
               </div>
 
               {/* Hero Stats Footer */}
-              <div className="hero-stats-row">
+              <div className="hero-stats-row soft">
                 <div className="hero-stat">
                   <span className="stat-label">⚡ Transfer Speed</span>
-                  <b className="stat-value" style={{ color: hero.theme.tagColor }}>{hero.statSpeed}</b>
+                  <b className="stat-value" style={{ color: hero.theme.primary }}>{hero.statSpeed}</b>
                 </div>
                 <div className="hero-stat">
                   <span className="stat-label">🛡️ Security</span>
-                  <b className="stat-value">End-to-End</b>
+                  <b className="stat-value" style={{ color: '#0F172A' }}>End-to-End</b>
                 </div>
                 <div className="hero-stat">
                   <span className="stat-label">⏱️ Auto-Delete</span>
-                  <b className="stat-value">10 Minutes</b>
+                  <b className="stat-value" style={{ color: '#0F172A' }}>10 Minutes</b>
                 </div>
               </div>
             </motion.div>
@@ -183,13 +200,13 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
         </AnimatePresence>
 
         {/* Scan instruction */}
-        <p className="hero-scan-hint">
+        <p className="hero-scan-hint soft">
           Scan with <b>Phone Camera</b>, <b>Google Lens</b>, or <b>DoquMay</b> to send files.
         </p>
 
         {/* Footer timer & actions */}
         {expired ? (
-          <motion.button className="btn btn-primary" onClick={onRefresh} whileTap={{ scale: 0.97 }}>
+          <motion.button className="btn btn-primary soft" onClick={onRefresh} whileTap={{ scale: 0.97 }}>
             <RefreshIcon width={20} height={20} /> Refresh QR Code
           </motion.button>
         ) : qr ? (
@@ -204,10 +221,10 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
             </div>
 
             <div className="modal-actions-row">
-              <button type="button" className="btn btn-pill" onClick={copy}>
-                <CopyIcon width={16} height={16} /> {copied ? 'Link Copied!' : 'Copy Link Instead'}
+              <button type="button" className="btn btn-pill soft" onClick={copy}>
+                <CopyIcon width={16} height={16} /> {copied ? 'Link Copied!' : 'Copy Link'}
               </button>
-              <button type="button" className="btn btn-ghost" onClick={handleRerollHero}>
+              <button type="button" className="btn btn-ghost soft" onClick={handleRerollHero}>
                 🎲 Draw Surprise Hero
               </button>
             </div>
