@@ -1590,14 +1590,28 @@ h1, h2, p { margin: 0; }
 
 /* ================= DOQUMAY FINTECH & ANIME ART SURPRISE QR STANDEE (SOFT SHADES) ================= */
 .hero-qr-sheet {
-  max-width: 500px;
+  max-width: 460px;
   max-height: 94vh;
   overflow-y: auto;
-  gap: 14px;
+  gap: 10px;
   background: #ffffff;
-  border-radius: 32px 32px 0 0;
-  padding: 24px 20px max(24px, env(safe-area-inset-bottom));
+  border-radius: 28px 28px 0 0;
+  padding: 20px 20px max(20px, env(safe-area-inset-bottom));
   box-shadow: 0 -10px 40px rgba(99, 102, 241, 0.1);
+}
+
+@media (min-width: 600px) {
+  .backdrop {
+    align-items: center;
+    padding: 20px;
+  }
+  .sheet {
+    border-radius: 28px;
+  }
+  .hero-qr-sheet {
+    border-radius: 28px;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+  }
 }
 
 .hero-qr-sheet.soft-theme {
@@ -1965,6 +1979,44 @@ h1, h2, p { margin: 0; }
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #0f172a;
+}
+
+/* One Clean Print Button at Bottom */
+.btn-print-standee {
+  width: 100%;
+  min-height: 50px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #3b82f6 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  margin-top: 6px;
+}
+.btn-print-standee:hover {
+  box-shadow: 0 8px 26px rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+}
+.btn-print-standee:active {
+  transform: translateY(1px);
+}
+
+.surprise-hero-card.permanent-hero-card.soft {
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+.hero-qr-box.permanent.soft {
+  padding: 12px;
+  margin: 2px auto;
+  border-radius: 20px;
 }
 
 /* Welcome Screen Brand Header (Soft Theme) */

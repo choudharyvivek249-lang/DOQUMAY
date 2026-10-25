@@ -2,10 +2,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRef, useState } from 'react';
 import { getHeroForSeed, getRandomHero } from '../utils/heroCards';
-import { CloseIcon, CopyIcon, DOQUMAY_QR_LOGO_DATA_URI, DoquMayLogo, QrIcon } from './Icons';
+import { CloseIcon, DOQUMAY_QR_LOGO_DATA_URI, DoquMayLogo } from './Icons';
 
 export default function PermanentQRModal({ account, onClose }) {
-  const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const qrRef = useRef(null);
 
@@ -24,21 +23,11 @@ export default function PermanentQRModal({ account, onClose }) {
     }, 150);
   };
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(permanentUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* fallback */
-    }
-  };
-
   /**
    * Generates a high-res printable merchant-style anime standee poster
-   * with soft shades, hero artwork, and the clean scannable QR code
+   * and triggers the browser print dialog plus a backup image download
    */
-  const downloadPrintableStandee = async () => {
+  const handlePrintStandee = async () => {
     const svg = qrRef.current?.querySelector('svg.main-qr-svg');
     if (!svg || downloading) return;
     setDownloading(true);
@@ -135,32 +124,60 @@ export default function PermanentQRModal({ account, onClose }) {
         ctx.font = '500 18px Manrope, sans-serif';
         ctx.fillText('🔒 Instant Zero-Login Transfer · Files auto-delete in 10 minutes · Powered by DoquMay', 600, 1420);
 
+        const standeeDataUrl = canvas.toDataURL('image/png');
+
+        // 1. Trigger print via invisible iframe
+        try {
+          let iframe = document.getElementById('doqumay-print-frame');
+          if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.id = 'doqumay-print-frame';
+            iframe.style.position = 'fixed';
+            iframe.style.right = '0';
+            iframe.style.bottom = '0';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = '0';
+            document.body.appendChild(iframe);
+          }
+
+          const frameDoc = iframe.contentWindow.document;
+          frameDoc.open();
+          frameDoc.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <title>DoquMay Standee - @${username}</title>
+                <style>
+                  @page { size: auto; margin: 10mm; }
+                  body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
+                  img { max-width: 100%; max-height: 96vh; object-fit: contain; }
+                </style>
+              </head>
+              <body>
+                <img src="${standeeDataUrl}" onload="window.focus(); window.print();" />
+              </body>
+            </html>
+          `);
+          frameDoc.close();
+        } catch {
+          // Fallback if iframe fails
+          window.print();
+        }
+
+        // 2. Also download image file backup
         const a = document.createElement('a');
         a.download = `DoquMay-Standee-${username}-${hero.name.replace(/\s+/g, '_')}.png`;
-        a.href = canvas.toDataURL('image/png');
+        a.href = standeeDataUrl;
         a.click();
+
         setDownloading(false);
       };
       img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
     } catch (e) {
       console.error(e);
+      window.print();
       setDownloading(false);
-    }
-  };
-
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `@${username} on DoquMay`,
-          text: `Scan my permanent DoquMay QR code or drop files directly to me:`,
-          url: permanentUrl,
-        });
-      } catch {
-        /* cancelled */
-      }
-    } else {
-      copy();
     }
   };
 
@@ -196,7 +213,7 @@ export default function PermanentQRModal({ account, onClose }) {
 
         {/* Pay-App Standee Header (Soft Shades) */}
         <div className="standee-header soft">
-          <DoquMayLogo size={46} showTagline={false} />
+          <DoquMayLogo size={42} showTagline={false} />
           <div className="standee-title-wrap">
             <h2 className="brand-h2">
               <span className="brand-doqu">Doqu</span>
@@ -266,13 +283,13 @@ export default function PermanentQRModal({ account, onClose }) {
                 {hero.quote}
               </p>
 
-              {/* QR Box with Crisp Scannable QR Code and Anime Corner Accents */}
+              {/* QR Box with Crisp Scannable WHOLE QR Code and Anime Corner Accents */}
               <div
                 className="qr-box hero-qr-box permanent soft"
                 ref={qrRef}
                 style={{ borderColor: hero.theme.qrBorder }}
               >
-                {/* Anime Art Corner Finder Eyes (Inspired by user references) */}
+                {/* Anime Art Corner Finder Eyes */}
                 <span className="anime-qr-corner tl" style={{ borderColor: hero.theme.primary }} />
                 <span className="anime-qr-corner tr" style={{ borderColor: hero.theme.primary }} />
                 <span className="anime-qr-corner bl" style={{ borderColor: hero.theme.primary }} />
@@ -289,8 +306,8 @@ export default function PermanentQRModal({ account, onClose }) {
                     className="main-qr-svg"
                     imageSettings={{
                       src: DOQUMAY_QR_LOGO_DATA_URI,
-                      height: 44,
-                      width: 44,
+                      height: 42,
+                      width: 42,
                       excavate: true,
                     }}
                   />
@@ -302,63 +319,19 @@ export default function PermanentQRModal({ account, onClose }) {
                 <span className="pulse-indicator" />
                 <span>Drop Documents to <b>@{username}</b> (Never Expires)</span>
               </div>
-
-              {/* Hero Stats */}
-              <div className="hero-stats-row soft">
-                <div className="hero-stat">
-                  <span className="stat-label">⚡ Transfer Speed</span>
-                  <b className="stat-value" style={{ color: hero.theme.primary }}>{hero.statSpeed}</b>
-                </div>
-                <div className="hero-stat">
-                  <span className="stat-label">🛡️ Security</span>
-                  <b className="stat-value" style={{ color: '#0F172A' }}>End-to-End</b>
-                </div>
-                <div className="hero-stat">
-                  <span className="stat-label">🎯 Status</span>
-                  <b className="stat-value" style={{ color: '#16A34A' }}>24/7 Active</b>
-                </div>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Personalized URL Pill */}
-        <div className="perm-url-pill soft" onClick={copy} title="Click to copy link">
-          <code>{window.location.host}/?to={username}</code>
-          <button type="button" className="icon-btn-sm" aria-label="Copy link">
-            <CopyIcon width={16} height={16} />
-          </button>
-        </div>
-
-        {/* Action Buttons (Soft Styles) */}
-        <div className="btn-group standee-btn-group">
-          <motion.button className="btn btn-primary soft" onClick={copy} whileTap={{ scale: 0.97 }}>
-            <CopyIcon width={18} height={18} /> {copied ? 'Link Copied!' : 'Copy Permanent Link'}
-          </motion.button>
-          <motion.button
-            className="btn btn-pill soft"
-            onClick={downloadPrintableStandee}
-            disabled={downloading}
-            whileTap={{ scale: 0.97 }}
-          >
-            <QrIcon width={18} height={18} /> {downloading ? 'Rendering Poster…' : '🖨️ Download Hero Standee'}
-          </motion.button>
-        </div>
-
-        <div className="secondary-actions-row">
-          <button type="button" className="link" onClick={handleRerollHero}>
-            🎲 Surprise Me With Another Character
-          </button>
-          {navigator.share && (
-            <button type="button" className="link" onClick={handleShare}>
-              📤 Share with Friends
-            </button>
-          )}
-        </div>
-
-        <p className="fine text-center" style={{ marginTop: '0.8rem', color: '#64748B' }}>
-          💡 Tip: Print this Hero Standee or display it on your desk or shop counter. Senders don’t need an account to send you files!
-        </p>
+        {/* ONE SINGLE CLEAN PRINT BUTTON AT BOTTOM */}
+        <motion.button
+          className="btn btn-primary soft btn-print-standee"
+          onClick={handlePrintStandee}
+          disabled={downloading}
+          whileTap={{ scale: 0.98 }}
+        >
+          🖨️ {downloading ? 'Preparing Standee Print…' : 'Print QR Standee'}
+        </motion.button>
       </motion.section>
     </motion.div>
   );

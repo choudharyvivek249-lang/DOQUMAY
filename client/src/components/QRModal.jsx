@@ -179,22 +179,6 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
                   </div>
                 )}
               </div>
-
-              {/* Hero Stats Footer */}
-              <div className="hero-stats-row soft">
-                <div className="hero-stat">
-                  <span className="stat-label">⚡ Transfer Speed</span>
-                  <b className="stat-value" style={{ color: hero.theme.primary }}>{hero.statSpeed}</b>
-                </div>
-                <div className="hero-stat">
-                  <span className="stat-label">🛡️ Security</span>
-                  <b className="stat-value" style={{ color: '#0F172A' }}>End-to-End</b>
-                </div>
-                <div className="hero-stat">
-                  <span className="stat-label">⏱️ Auto-Delete</span>
-                  <b className="stat-value" style={{ color: '#0F172A' }}>10 Minutes</b>
-                </div>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
