@@ -7,3 +7,7 @@ client/dist
 .env
 .DS_Store
 *.log
+*.md
+server/test
+.tempmediaStorage
+.user_uploaded
