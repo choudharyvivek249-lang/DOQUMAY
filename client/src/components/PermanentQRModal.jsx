@@ -2,16 +2,18 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRef, useState } from 'react';
 import { getHeroForSeed, getRandomHero } from '../utils/heroCards';
+import ArtisticAnimeQR from './ArtisticAnimeQR';
 import { CloseIcon, DOQUMAY_QR_LOGO_DATA_URI, DoquMayLogo } from './Icons';
 
 export default function PermanentQRModal({ account, onClose }) {
   const [downloading, setDownloading] = useState(false);
+  const [qrMode, setQrMode] = useState('artistic'); // 'artistic' | 'classic'
   const qrRef = useRef(null);
 
   const username = account?.username || '';
   const permanentUrl = `${window.location.origin}/?to=${encodeURIComponent(username)}`;
 
-  // Surprise anime / superhero card seeded by username
+  // Surprise anime collectible card seeded by username
   const [hero, setHero] = useState(() => getHeroForSeed(username));
   const [cardRevealed, setCardRevealed] = useState(true);
 
@@ -28,12 +30,10 @@ export default function PermanentQRModal({ account, onClose }) {
    * and triggers the browser print dialog plus a backup image download
    */
   const handlePrintStandee = async () => {
-    const svg = qrRef.current?.querySelector('svg.main-qr-svg');
-    if (!svg || downloading) return;
+    if (downloading) return;
     setDownloading(true);
 
     try {
-      const svgData = new XMLSerializer().serializeToString(svg);
       const canvas = document.createElement('canvas');
       canvas.width = 1200;
       canvas.height = 1600;
@@ -91,7 +91,7 @@ export default function PermanentQRModal({ account, onClose }) {
       ctx.font = 'italic 20px Manrope, sans-serif';
       ctx.fillText(hero.quote, 600, 415);
 
-      // QR Code Container
+      // QR Code Container Background
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.roundRect(260, 480, 680, 680, 36);
@@ -100,10 +100,14 @@ export default function PermanentQRModal({ account, onClose }) {
       ctx.lineWidth = 4;
       ctx.stroke();
 
-      // Draw QR Code
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 310, 530, 580, 580);
+      // Check for rendered canvas from ArtisticAnimeQR or SVG fallback
+      const artCanvas = qrRef.current?.querySelector('canvas');
+      const artSvg = qrRef.current?.querySelector('svg.main-qr-svg');
+
+      const finishPrint = (qrImg) => {
+        if (qrImg) {
+          ctx.drawImage(qrImg, 290, 510, 620, 620);
+        }
 
         // Account Handle Pill
         ctx.fillStyle = hero.theme.primary;
@@ -126,7 +130,7 @@ export default function PermanentQRModal({ account, onClose }) {
 
         const standeeDataUrl = canvas.toDataURL('image/png');
 
-        // 1. Trigger print via invisible iframe
+        // Trigger print via invisible iframe
         try {
           let iframe = document.getElementById('doqumay-print-frame');
           if (!iframe) {
@@ -161,11 +165,10 @@ export default function PermanentQRModal({ account, onClose }) {
           `);
           frameDoc.close();
         } catch {
-          // Fallback if iframe fails
           window.print();
         }
 
-        // 2. Also download image file backup
+        // Backup download
         const a = document.createElement('a');
         a.download = `DoquMay-Standee-${username}-${hero.name.replace(/\s+/g, '_')}.png`;
         a.href = standeeDataUrl;
@@ -173,7 +176,17 @@ export default function PermanentQRModal({ account, onClose }) {
 
         setDownloading(false);
       };
-      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+
+      if (artCanvas) {
+        finishPrint(artCanvas);
+      } else if (artSvg) {
+        const svgData = new XMLSerializer().serializeToString(artSvg);
+        const img = new Image();
+        img.onload = () => finishPrint(img);
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+      } else {
+        finishPrint(null);
+      }
     } catch (e) {
       console.error(e);
       window.print();
@@ -283,35 +296,55 @@ export default function PermanentQRModal({ account, onClose }) {
                 {hero.quote}
               </p>
 
-              {/* QR Box with Crisp Scannable WHOLE QR Code and Anime Corner Accents */}
+              {/* Mode Toggle: Artistic Anime QR vs Classic Crisp QR */}
+              <div className="qr-mode-toggle">
+                <button
+                  type="button"
+                  className={`qr-mode-tab ${qrMode === 'artistic' ? 'active' : ''}`}
+                  onClick={() => setQrMode('artistic')}
+                >
+                  🎨 Anime Art QR
+                </button>
+                <button
+                  type="button"
+                  className={`qr-mode-tab ${qrMode === 'classic' ? 'active' : ''}`}
+                  onClick={() => setQrMode('classic')}
+                >
+                  ⚡ Classic Mode
+                </button>
+              </div>
+
+              {/* QR Container: Features the Artistic Anime QR (ControlNet Style) or Classic */}
               <div
                 className="qr-box hero-qr-box permanent soft"
                 ref={qrRef}
                 style={{ borderColor: hero.theme.qrBorder }}
               >
-                {/* Anime Art Corner Finder Eyes */}
-                <span className="anime-qr-corner tl" style={{ borderColor: hero.theme.primary }} />
-                <span className="anime-qr-corner tr" style={{ borderColor: hero.theme.primary }} />
-                <span className="anime-qr-corner bl" style={{ borderColor: hero.theme.primary }} />
-                <span className="anime-qr-corner br" style={{ borderColor: hero.theme.primary }} />
-
-                <div className="qr-inner-wrapper">
-                  <QRCodeSVG
+                {qrMode === 'artistic' ? (
+                  <ArtisticAnimeQR
                     value={permanentUrl}
-                    size={220}
-                    level="H"
-                    bgColor="#ffffff"
-                    fgColor="#0f172a"
-                    marginSize={2}
-                    className="main-qr-svg"
-                    imageSettings={{
-                      src: DOQUMAY_QR_LOGO_DATA_URI,
-                      height: 42,
-                      width: 42,
-                      excavate: true,
-                    }}
+                    hero={hero}
+                    size={248}
                   />
-                </div>
+                ) : (
+                  <div className="qr-inner-wrapper">
+                    <QRCodeSVG
+                      value={permanentUrl}
+                      size={220}
+                      level="H"
+                      bgColor="#ffffff"
+                      fgColor="#0f172a"
+                      marginSize={2}
+                      className="main-qr-svg"
+                      imageSettings={{
+                        src: DOQUMAY_QR_LOGO_DATA_URI,
+                        height: 42,
+                        width: 42,
+                        excavate: true,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Recipient Handle Pill (Soft Style) */}
@@ -336,3 +369,4 @@ export default function PermanentQRModal({ account, onClose }) {
     </motion.div>
   );
 }
+

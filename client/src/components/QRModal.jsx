@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { formatCountdown } from '../utils/files';
 import { getHeroForSeed, getRandomHero } from '../utils/heroCards';
 import { useCountdown } from '../utils/useTick';
+import ArtisticAnimeQR from './ArtisticAnimeQR';
 import { CloseIcon, CopyIcon, DOQUMAY_QR_LOGO_DATA_URI, DoquMayLogo, RefreshIcon } from './Icons';
 
 const QR_LIFETIME = 120000;
@@ -151,23 +152,11 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
                 <span className="anime-qr-corner br" style={{ borderColor: hero.theme.primary }} />
 
                 {qr ? (
-                  <div className="qr-inner-wrapper">
-                    <QRCodeSVG
-                      value={qr.link}
-                      size={210}
-                      level="H"
-                      bgColor="#ffffff"
-                      fgColor="#0f172a"
-                      marginSize={2}
-                      className="main-qr-svg"
-                      imageSettings={{
-                        src: DOQUMAY_QR_LOGO_DATA_URI,
-                        height: 44,
-                        width: 44,
-                        excavate: true,
-                      }}
-                    />
-                  </div>
+                  <ArtisticAnimeQR
+                    value={qr.link}
+                    hero={hero}
+                    size={240}
+                  />
                 ) : (
                   <div className="qr-skeleton" />
                 )}
