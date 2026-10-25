@@ -23,6 +23,7 @@ app.use('/api', routes);
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../client/dist');
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));
+  app.get('/assets/*', (_req, res) => res.status(404).send('Asset not found'));
   app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 }
 

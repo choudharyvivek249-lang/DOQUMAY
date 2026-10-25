@@ -33,17 +33,27 @@ export default function App() {
       const raw = localStorage.getItem(ACCOUNT_KEY);
       if (raw) return JSON.parse(raw).displayName || JSON.parse(raw).username;
     } catch { /* ignore */ }
-    return sessionStorage.getItem(NAME_KEY) || '';
+    try {
+      return sessionStorage.getItem(NAME_KEY) || '';
+    } catch {
+      return '';
+    }
   });
 
   const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem(VIEW_MODE_KEY) || 'whatsapp';
+    try {
+      return localStorage.getItem(VIEW_MODE_KEY) || 'whatsapp';
+    } catch {
+      return 'whatsapp';
+    }
   });
 
   const toggleViewMode = () => {
     setViewMode((prev) => {
       const next = prev === 'whatsapp' ? 'classic' : 'whatsapp';
-      localStorage.setItem(VIEW_MODE_KEY, next);
+      try {
+        localStorage.setItem(VIEW_MODE_KEY, next);
+      } catch {}
       return next;
     });
   };

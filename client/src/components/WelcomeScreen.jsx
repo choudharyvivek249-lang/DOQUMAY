@@ -13,14 +13,14 @@ export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
   return (
     <motion.main
       className="screen center welcome-screen-bg"
-      initial={{ opacity: 0 }}
+      initial={false}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       <motion.form
         className="welcome"
         onSubmit={submit}
-        initial={{ y: 24, opacity: 0 }}
+        initial={false}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', damping: 22, stiffness: 220 }}
       >
