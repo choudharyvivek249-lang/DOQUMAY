@@ -11,6 +11,7 @@ export default function HomeScreen({
   onMyQr,
   onPermanentQr,
   onOpenInbox,
+  onOpenWhatsAppHub,
   onAuth,
   onLogout,
   onChangeName,
@@ -37,15 +38,15 @@ export default function HomeScreen({
       {dropsCount > 0 && (
         <motion.div
           className="inbox-banner"
-          onClick={onOpenInbox}
+          onClick={onOpenWhatsAppHub || onOpenInbox}
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           whileTap={{ scale: 0.98 }}
         >
           <span className="inbox-badge">{dropsCount}</span>
           <div className="inbox-banner-text">
-            <b>{dropsCount} file{dropsCount > 1 ? 's' : ''} in your Drop-box!</b>
-            <span>Tap to preview or download</span>
+            <b>{dropsCount} file{dropsCount > 1 ? 's' : ''} in your WhatsApp Drop-box!</b>
+            <span>Tap to open WhatsApp Senders Hub</span>
           </div>
           <span className="inbox-arrow">→</span>
         </motion.div>
@@ -68,6 +69,21 @@ export default function HomeScreen({
       <div className="qr-options-grid">
         {account ? (
           <>
+            <motion.button
+              className="btn btn-whatsapp-card"
+              onClick={onOpenWhatsAppHub}
+              whileTap={{ scale: 0.97 }}
+            >
+              <span className="wa-icon-large">💬</span>
+              <div className="btn-col">
+                <b>WhatsApp Senders Hub</b>
+                <span className="sub">
+                  {dropsCount > 0 ? `${dropsCount} file${dropsCount > 1 ? 's' : ''} waiting · View senders` : 'See files from multiple senders'}
+                </span>
+              </div>
+              <span className="inbox-arrow">→</span>
+            </motion.button>
+
             <motion.button
               className="btn btn-permanent"
               onClick={onPermanentQr}
@@ -95,7 +111,7 @@ export default function HomeScreen({
                 onClick={onOpenInbox}
                 whileTap={{ scale: 0.97 }}
               >
-                📦 Drop-box {dropsCount > 0 ? `(${dropsCount})` : ''}
+                📦 Quick List {dropsCount > 0 ? `(${dropsCount})` : ''}
               </motion.button>
             </div>
           </>

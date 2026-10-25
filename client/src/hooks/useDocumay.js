@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { parseScanTarget, validateFile } from '../utils/files';
+import { playNotificationSound } from '../utils/sound';
 
 export const SERVER = import.meta.env.VITE_SERVER_URL || ''; // empty = same origin (dev proxy / production)
 const CHUNK = 512 * 1024;
@@ -118,6 +119,7 @@ export function useDocumay(name, notify, account) {
     });
 
     socket.on('drop:received', (drop) => {
+      playNotificationSound();
       notifyRef.current(`New file in your Drop-box from ${drop.senderName}: ${drop.name}`);
       setDrops((l) => [drop, ...l.filter((d) => d.id !== drop.id)]);
     });

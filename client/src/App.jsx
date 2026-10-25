@@ -10,11 +10,13 @@ import QRModal from './components/QRModal';
 import QRScanner from './components/QRScanner';
 import TransferRoom from './components/TransferRoom';
 import WelcomeScreen from './components/WelcomeScreen';
+import WhatsAppHub from './components/WhatsAppHub';
 import { useDocumay } from './hooks/useDocumay';
 import { parseScanTarget } from './utils/files';
 
 const NAME_KEY = 'documay:name';
 const ACCOUNT_KEY = 'documay:account';
+const VIEW_MODE_KEY = 'documay:viewMode';
 
 export default function App() {
   const [account, setAccount] = useState(() => {
@@ -33,6 +35,18 @@ export default function App() {
     } catch { /* ignore */ }
     return sessionStorage.getItem(NAME_KEY) || '';
   });
+
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem(VIEW_MODE_KEY) || 'whatsapp';
+  });
+
+  const toggleViewMode = () => {
+    setViewMode((prev) => {
+      const next = prev === 'whatsapp' ? 'classic' : 'whatsapp';
+      localStorage.setItem(VIEW_MODE_KEY, next);
+      return next;
+    });
+  };
 
   const [overlay, setOverlay] = useState(null); // 'qr' | 'permQr' | 'scan' | 'auth' | 'inbox' | 'drop' | null
   const [dropTarget, setDropTarget] = useState(null); // username when dropping files
@@ -79,6 +93,8 @@ export default function App() {
     localStorage.setItem(ACCOUNT_KEY, JSON.stringify(user));
     setAccount(user);
     setName(user.displayName || user.username);
+    setViewMode('whatsapp');
+    localStorage.setItem(VIEW_MODE_KEY, 'whatsapp');
     notify(`Welcome, @${user.username}!`);
   };
 
@@ -125,6 +141,24 @@ export default function App() {
             onSend={dm.sendFiles}
             onCancel={dm.cancel}
           />
+        ) : account && viewMode === 'whatsapp' ? (
+          <WhatsAppHub
+            key="whatsapp"
+            account={account}
+            connected={dm.connected}
+            drops={dm.drops}
+            onDismissDrop={dm.dismissDrop}
+            onScan={() => setOverlay('scan')}
+            onPermanentQr={() => setOverlay('permQr')}
+            onMyQr={() => setOverlay('qr')}
+            onOpenDropModal={(target) => {
+              setDropTarget(target);
+              setOverlay('drop');
+            }}
+            onLogout={handleLogout}
+            onToggleClassic={toggleViewMode}
+            notify={notify}
+          />
         ) : name ? (
           <HomeScreen
             key="home"
@@ -136,6 +170,10 @@ export default function App() {
             onMyQr={() => setOverlay('qr')}
             onPermanentQr={() => setOverlay('permQr')}
             onOpenInbox={() => setOverlay('inbox')}
+            onOpenWhatsAppHub={() => {
+              setViewMode('whatsapp');
+              localStorage.setItem(VIEW_MODE_KEY, 'whatsapp');
+            }}
             onAuth={() => setOverlay('auth')}
             onLogout={handleLogout}
             onChangeName={handleChangeName}
