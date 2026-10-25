@@ -38,9 +38,31 @@ export function useDocumay(name, notify, account) {
 
   const call = useCallback((event, payload = {}) => new Promise((resolve) => {
     const s = socketRef.current;
-    if (!s?.connected) return resolve({ ok: false, error: 'You’re offline. Reconnecting…' });
-    const timer = setTimeout(() => resolve({ ok: false, error: 'The server took too long to answer.' }), 30000);
-    s.emit(event, payload, (res) => { clearTimeout(timer); resolve(res || { ok: false, error: 'No response from the server.' }); });
+    const send = (socket) => {
+      const timer = setTimeout(() => resolve({ ok: false, error: 'The server took too long to answer.' }), 30000);
+      socket.emit(event, payload, (res) => {
+        clearTimeout(timer);
+        resolve(res || { ok: false, error: 'No response from the server.' });
+      });
+    };
+
+    if (s?.connected) {
+      return send(s);
+    }
+
+    if (s) {
+      // Socket exists but is connecting or reconnecting: wait up to 10 seconds for connect!
+      const waitTimer = setTimeout(() => {
+        resolve({ ok: false, error: 'Cannot reach server. Please check your internet connection.' });
+      }, 10000);
+      s.once('connect', () => {
+        clearTimeout(waitTimer);
+        send(s);
+      });
+      return;
+    }
+
+    resolve({ ok: false, error: 'Connecting to Documay. Please wait a moment…' });
   }), []);
 
   /* Streams one accepted file to the server in 512 KB chunks */
