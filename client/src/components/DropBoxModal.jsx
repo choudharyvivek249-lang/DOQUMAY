@@ -27,7 +27,15 @@ export default function DropBoxModal({
   const [error, setError] = useState('');
 
   // 4-Digit Device Security PIN protection before first file share
-  const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+  const [pinDigits, setPinDigits] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('documay:pin') || localStorage.getItem('documay:pin');
+      if (stored && /^\d{4}$/.test(stored)) {
+        return stored.split('');
+      }
+    } catch {}
+    return ['', '', '', ''];
+  });
   const [pinError, setPinError] = useState('');
   const pinInputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
@@ -121,6 +129,8 @@ export default function DropBoxModal({
     const finalSenderName = senderName.trim() || 'Guest Sender';
     try {
       localStorage.setItem(SENDER_NAME_KEY, finalSenderName);
+      localStorage.setItem('documay:pin', pinStr);
+      sessionStorage.setItem('documay:pin', pinStr);
     } catch { /* ignore */ }
 
     try {
@@ -152,10 +162,10 @@ export default function DropBoxModal({
       setSelectedFiles([]);
       setProgressPercent(100);
 
-      // Auto-navigate sender to WhatsApp Hub after 1.5 seconds!
+      // Auto-navigate sender directly to WhatsApp Hub!
       setTimeout(() => {
         onComplete?.(finalSenderName, targetUsername);
-      }, 1500);
+      }, 600);
     } catch {
       setError('An error occurred during transfer. Please check connection and try again.');
     } finally {

@@ -15,6 +15,7 @@ export default function TransferRoom({
   onCancel,
   onVerifyPin,
   onAuthorizeHost,
+  onOpenWhatsApp,
 }) {
   const now = useNow(1000);
   const fileInput = useRef(null);
@@ -28,6 +29,8 @@ export default function TransferRoom({
     if (e.target.files?.length) onSend(e.target.files);
     e.target.value = '';
   };
+
+  const hasSentFiles = items.some((i) => i.dir === 'out' && (i.status === 'ready' || i.status === 'done'));
 
   return (
     <motion.main
@@ -60,12 +63,32 @@ export default function TransferRoom({
             {room.peerOnline ? '🔒 PIN Verified · Both can send files' : 'Disconnected'}
           </span>
         </div>
+        {onOpenWhatsApp && (
+          <button
+            type="button"
+            className="btn btn-permanent-outline"
+            onClick={onOpenWhatsApp}
+            style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+          >
+            💬 WhatsApp Hub
+          </button>
+        )}
       </header>
 
       <div className="list" aria-live="polite">
         <div className="wa-encryption-notice">
           🛡️ 4-Digit Security Handshake Verified · End-to-end streamed directly between your devices.
         </div>
+
+        {hasSentFiles && onOpenWhatsApp && (
+          <div
+            className="wa-date-pill"
+            style={{ cursor: 'pointer', background: '#dcf8c6', color: '#075e54', fontWeight: 600, padding: '8px 16px' }}
+            onClick={onOpenWhatsApp}
+          >
+            ✓ File delivered! Tap here to view in WhatsApp Hub 💬
+          </div>
+        )}
 
         {items.length === 0 && (
           <div className="empty-room">

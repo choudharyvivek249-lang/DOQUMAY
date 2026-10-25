@@ -1,11 +1,12 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useMemo, useState } from 'react';
-import { formatCountdown, formatSize, formatTime, kindOf } from '../utils/files';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ACCEPT, formatCountdown, formatSize, formatTime, kindOf } from '../utils/files';
 import { useCountdown } from '../utils/useTick';
 import Avatar from './Avatar';
 import {
   BackIcon,
   CheckDoubleIcon,
+  ClipIcon,
   CloseIcon,
   CopyIcon,
   DownloadIcon,
@@ -16,6 +17,7 @@ import {
   SearchIcon,
   TrashIcon,
 } from './Icons';
+import SecurityPinHandshake from './SecurityPinHandshake';
 
 /**
  * Single file bubble inside a sender's WhatsApp chat thread
@@ -113,6 +115,12 @@ export default function WhatsAppHub({
   connected,
   drops = [],
   dropItems = [],
+  room = null,
+  roomItems = [],
+  onSendRoomFiles,
+  onVerifyPin,
+  onAuthorizeHost,
+  onLeaveRoom,
   onDismissDrop,
   onScan,
   onPermanentQr,
@@ -128,12 +136,20 @@ export default function WhatsAppHub({
   const [searchQuery, setSearchQuery] = useState('');
   const [previewDrop, setPreviewDrop] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
+  const roomFileInputRef = useRef(null);
 
   const isGuest = !account;
   const myDisplayName = account ? (account.displayName || account.username) : (guestName || 'Guest User');
   const myUsernameTag = account ? `@${account.username}` : 'Guest Mode';
 
-  // Group all drops (inbound) and dropItems (outbound) by conversation partner
+  const handlePickRoomFiles = (e) => {
+    if (e.target.files?.length) {
+      onSendRoomFiles?.(e.target.files);
+    }
+    e.target.value = '';
+  };
+
+  // Group all drops (inbound), dropItems (outbound), and live room files by conversation partner
   const senderGroups = useMemo(() => {
     const map = new Map();
 
@@ -185,14 +201,59 @@ export default function WhatsAppHub({
       group.totalBytes += item.size || 0;
     }
 
+    // 3. Live connected room peer & live transferred files
+    if (room?.peer?.name) {
+      const rawName = room.peer.name.trim();
+      const key = rawName.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          name: rawName,
+          drops: [],
+          latestTs: Date.now(),
+          totalBytes: 0,
+          minExpiresAt: Infinity,
+          isLiveRoom: true,
+          peerOnline: room.peerOnline,
+          verified: room.verified,
+        });
+      }
+      const group = map.get(key);
+      group.isLiveRoom = true;
+      group.peerOnline = room.peerOnline;
+      group.verified = room.verified;
+      for (const item of roomItems) {
+        if (!group.drops.some((d) => d.id === item.id)) {
+          group.drops.push({
+            ...item,
+            senderName: item.dir === 'out' ? 'You' : rawName,
+            expiresAt: item.expiresAt || (Date.now() + 600000),
+          });
+          if ((item.ts || Date.now()) > group.latestTs) group.latestTs = item.ts || Date.now();
+          group.totalBytes += item.size || 0;
+        }
+      }
+    }
+
     // Sort drops inside each group by chronological order
     for (const group of map.values()) {
       group.drops.sort((a, b) => a.ts - b.ts);
     }
 
-    // Sort senders list by latest activity descending
-    return Array.from(map.values()).sort((a, b) => b.latestTs - a.latestTs);
-  }, [drops, dropItems]);
+    // Sort senders list by latest activity descending (live room always at the top!)
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.isLiveRoom && !b.isLiveRoom) return -1;
+      if (!a.isLiveRoom && b.isLiveRoom) return 1;
+      return b.latestTs - a.latestTs;
+    });
+  }, [drops, dropItems, room, roomItems]);
+
+  // Auto-select live room conversation when room becomes active
+  useEffect(() => {
+    if (room?.peer?.name) {
+      setSelectedKey(room.peer.name.toLowerCase());
+    }
+  }, [room?.id]);
 
   // Auto-select latest active conversation if none selected
   useEffect(() => {
@@ -707,6 +768,18 @@ export default function WhatsAppHub({
               </div>
             </header>
 
+            {/* Live Room Security PIN Handshake Overlay */}
+            <AnimatePresence>
+              {activeGroup.isLiveRoom && room && !room.verified && (
+                <SecurityPinHandshake
+                  room={room}
+                  onVerifyPin={onVerifyPin}
+                  onAuthorizeHost={onAuthorizeHost}
+                  onCancel={() => { onLeaveRoom?.(); setSelectedKey(null); }}
+                />
+              )}
+            </AnimatePresence>
+
             {/* Chat Messages Body with WhatsApp Wallpaper */}
             <div className="wa-messages-area">
               <div className="wa-date-pill">TODAY</div>
@@ -731,7 +804,7 @@ export default function WhatsAppHub({
             <footer className="wa-chat-footer">
               <div className="wa-footer-left">
                 <span className="wa-footer-info">
-                  Sharing documents with <b>{activeGroup.name}</b>
+                  Sharing documents with <b>{activeGroup.name}</b> {activeGroup.isLiveRoom && (room?.peerOnline ? '● Live' : '○ Offline')}
                 </span>
               </div>
               <div className="wa-footer-actions">
@@ -743,15 +816,30 @@ export default function WhatsAppHub({
                   <DownloadIcon width={16} height={16} /> Save All
                 </button>
 
-                {/* Bidirectional sending: send files back to this user */}
-                <button
-                  type="button"
-                  className="wa-footer-btn reply-btn"
-                  onClick={() => onOpenDropModal?.(activeGroup.name)}
-                  title={`Send files back to ${activeGroup.name}`}
-                >
-                  📤 Send Files Back
-                </button>
+                {/* Send files button: direct live streaming if live room, or drop modal if offline */}
+                {activeGroup.isLiveRoom ? (
+                  <>
+                    <input ref={roomFileInputRef} type="file" accept={ACCEPT} multiple hidden onChange={handlePickRoomFiles} />
+                    <button
+                      type="button"
+                      className="wa-footer-btn reply-btn"
+                      onClick={() => roomFileInputRef.current?.click()}
+                      title={`Send files directly to ${activeGroup.name}`}
+                      disabled={!room?.peerOnline || !room?.verified}
+                    >
+                      <ClipIcon width={16} height={16} /> 📎 Send File
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="wa-footer-btn reply-btn"
+                    onClick={() => onOpenDropModal?.(activeGroup.name)}
+                    title={`Send files back to ${activeGroup.name}`}
+                  >
+                    📤 Send Files Back
+                  </button>
+                )}
 
                 {!isGuest ? (
                   <button

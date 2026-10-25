@@ -10,18 +10,24 @@ const router = Router();
 
 router.get('/health', (_req, res) => res.json({ ok: true }));
 
-// Auth: Register with just unique username and password
+// Auth: Register with unique username, password, and 4-digit security PIN
 router.post('/auth/register', async (req, res) => {
-  const { username, password } = req.body || {};
-  const result = await registerUser(username, password);
+  const { username, password, pin } = req.body || {};
+  if (!pin || !/^\d{4}$/.test(String(pin).trim())) {
+    return res.status(400).json({ ok: false, error: 'Please enter a 4-digit Security PIN to protect your permanent QR standee.' });
+  }
+  const result = await registerUser(username, password, pin);
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
 });
 
-// Auth: Log in with username and password
+// Auth: Log in with username, password, and 4-digit security PIN
 router.post('/auth/login', async (req, res) => {
-  const { username, password } = req.body || {};
-  const result = await loginUser(username, password);
+  const { username, password, pin } = req.body || {};
+  if (!pin || !/^\d{4}$/.test(String(pin).trim())) {
+    return res.status(401).json({ ok: false, error: 'Please enter your 4-digit Security PIN to unlock your account.' });
+  }
+  const result = await loginUser(username, password, pin);
   if (!result.ok) return res.status(401).json(result);
   res.json(result);
 });

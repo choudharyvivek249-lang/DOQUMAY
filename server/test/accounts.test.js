@@ -36,11 +36,24 @@ test('accounts: registration, unique usernames, and login', async () => {
   const loginNonExistent = await loginUser('ghost_user_123', 'anypassword');
   assert.equal(loginNonExistent.ok, false);
 
-  // 8. Public user lookup
+  // 8. 4-digit PIN registration and verification
+  const regPin = await registerUser('pin_user_test', 'secret123', '4321');
+  assert.equal(regPin.ok, true);
+  assert.equal(regPin.user.pin, '4321');
+
+  const loginPinWrong = await loginUser('pin_user_test', 'secret123', '9999');
+  assert.equal(loginPinWrong.ok, false);
+  assert.match(loginPinWrong.error, /incorrect 4-digit/i);
+
+  const loginPinCorrect = await loginUser('pin_user_test', 'secret123', '4321');
+  assert.equal(loginPinCorrect.ok, true);
+  assert.equal(loginPinCorrect.user.pin, '4321');
+
+  // 9. Public user lookup
   const pub = getUser('alice_test');
   assert.equal(pub.username, 'alice_test');
   assert.equal(pub.salt, undefined); // salt must not be exposed
   assert.equal(pub.hash, undefined); // hash must not be exposed
 
-  console.log('  ✓ accounts, uniqueness, and password validation passed');
+  console.log('  ✓ accounts, uniqueness, password, and 4-digit PIN validation passed');
 });

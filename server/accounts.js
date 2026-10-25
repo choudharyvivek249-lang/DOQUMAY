@@ -48,12 +48,18 @@ export function validateUsername(username) {
   return null;
 }
 
-export async function registerUser(username, password) {
+export async function registerUser(username, password, pin) {
   const err = validateUsername(username);
   if (err) return { ok: false, error: err };
   if (!password || typeof password !== 'string' || password.length < 4) {
     return { ok: false, error: 'Password must be at least 4 characters.' };
   }
+
+  const cleanPin = typeof pin === 'string' ? pin.trim() : '';
+  if (cleanPin && !/^\d{4}$/.test(cleanPin)) {
+    return { ok: false, error: 'PIN must be exactly 4 numeric digits.' };
+  }
+  const effectivePin = cleanPin || '1234';
 
   const clean = username.trim();
   const key = clean.toLowerCase();
@@ -63,6 +69,7 @@ export async function registerUser(username, password) {
 
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  const pinHash = crypto.scryptSync(effectivePin, salt, 32).toString('hex');
   const token = crypto.randomBytes(24).toString('base64url');
 
   const user = {
@@ -70,6 +77,7 @@ export async function registerUser(username, password) {
     displayName: clean,
     salt,
     hash,
+    pinHash,
     token,
     createdAt: Date.now(),
   };
@@ -79,11 +87,11 @@ export async function registerUser(username, password) {
 
   return {
     ok: true,
-    user: { username: clean, displayName: clean, token },
+    user: { username: clean, displayName: clean, token, pin: effectivePin },
   };
 }
 
-export async function loginUser(username, password) {
+export async function loginUser(username, password, pin) {
   if (!username || !password) return { ok: false, error: 'Please enter your username and password.' };
   const key = username.trim().toLowerCase();
   const user = accounts.get(key);
@@ -93,13 +101,27 @@ export async function loginUser(username, password) {
   const match = crypto.timingSafeEqual(Buffer.from(testHash), Buffer.from(user.hash));
   if (!match) return { ok: false, error: 'Invalid username or password.' };
 
+  const cleanPin = typeof pin === 'string' ? pin.trim() : '';
+  if (user.pinHash && cleanPin) {
+    if (!/^\d{4}$/.test(cleanPin)) {
+      return { ok: false, error: 'PIN must be exactly 4 numeric digits.' };
+    }
+    const testPinHash = crypto.scryptSync(cleanPin, user.salt, 32).toString('hex');
+    const pinMatch = crypto.timingSafeEqual(Buffer.from(testPinHash), Buffer.from(user.pinHash));
+    if (!pinMatch) {
+      return { ok: false, error: 'Incorrect 4-digit Security PIN.' };
+    }
+  } else if (/^\d{4}$/.test(cleanPin)) {
+    user.pinHash = crypto.scryptSync(cleanPin, user.salt, 32).toString('hex');
+  }
+
   // Refresh token on login
   user.token = crypto.randomBytes(24).toString('base64url');
   await saveAccounts();
 
   return {
     ok: true,
-    user: { username: user.username, displayName: user.displayName, token: user.token },
+    user: { username: user.username, displayName: user.displayName, token: user.token, pin: cleanPin || '1234' },
   };
 }
 

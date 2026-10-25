@@ -124,23 +124,41 @@ export default function App() {
     if (dm.room) setOverlay(null);
   }, [dm.room?.id]);
 
-  const handleStartGuest = (guestName) => {
-    sessionStorage.setItem(NAME_KEY, guestName);
+  const handleStartGuest = (guestName, pin) => {
+    try {
+      sessionStorage.setItem(NAME_KEY, guestName);
+      if (pin) {
+        sessionStorage.setItem('documay:pin', pin);
+        localStorage.setItem('documay:pin', pin);
+      }
+    } catch {}
     setName(guestName);
+    setViewMode('whatsapp');
+    try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
+    notify(`Welcome to DoquMay, ${guestName}! Device secured.`);
   };
 
   const handleAuthSuccess = (user) => {
-    localStorage.setItem(ACCOUNT_KEY, JSON.stringify(user));
+    try {
+      localStorage.setItem(ACCOUNT_KEY, JSON.stringify(user));
+      if (user.pin) {
+        localStorage.setItem('documay:pin', user.pin);
+        sessionStorage.setItem('documay:pin', user.pin);
+      }
+    } catch {}
     setAccount(user);
     setName(user.displayName || user.username);
     setViewMode('whatsapp');
-    localStorage.setItem(VIEW_MODE_KEY, 'whatsapp');
+    try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
     notify(`Welcome, @${user.username}!`);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(ACCOUNT_KEY);
-    sessionStorage.removeItem(NAME_KEY);
+    try {
+      localStorage.removeItem(ACCOUNT_KEY);
+      sessionStorage.removeItem(NAME_KEY);
+      sessionStorage.removeItem('documay:pin');
+    } catch {}
     setAccount(null);
     setName('');
     setOverlay(null);
@@ -148,7 +166,10 @@ export default function App() {
   };
 
   const handleChangeName = () => {
-    sessionStorage.removeItem(NAME_KEY);
+    try {
+      sessionStorage.removeItem(NAME_KEY);
+      sessionStorage.removeItem('documay:pin');
+    } catch {}
     setName('');
     setOverlay(null);
   };
@@ -185,7 +206,7 @@ export default function App() {
   return (
     <>
       <AnimatePresence mode="wait">
-        {dm.room ? (
+        {dm.room && viewMode !== 'whatsapp' ? (
           <TransferRoom
             key="room"
             room={dm.room}
@@ -195,6 +216,10 @@ export default function App() {
             onCancel={dm.cancel}
             onVerifyPin={dm.verifyPin}
             onAuthorizeHost={dm.authorizeHost}
+            onOpenWhatsApp={() => {
+              setViewMode('whatsapp');
+              try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
+            }}
           />
         ) : name && viewMode === 'whatsapp' ? (
           <WhatsAppHub
@@ -204,6 +229,12 @@ export default function App() {
             connected={dm.connected}
             drops={dm.drops}
             dropItems={dm.dropItems}
+            room={dm.room}
+            roomItems={dm.items}
+            onSendRoomFiles={dm.sendFiles}
+            onVerifyPin={dm.verifyPin}
+            onAuthorizeHost={dm.authorizeHost}
+            onLeaveRoom={dm.leave}
             onDismissDrop={dm.dismissDrop}
             onScan={() => setOverlay('scan')}
             onPermanentQr={() => {
@@ -234,7 +265,7 @@ export default function App() {
             onOpenInbox={() => setOverlay('inbox')}
             onOpenWhatsAppHub={() => {
               setViewMode('whatsapp');
-              localStorage.setItem(VIEW_MODE_KEY, 'whatsapp');
+              try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
             }}
             onAuth={() => setOverlay('auth')}
             onLogout={handleLogout}
