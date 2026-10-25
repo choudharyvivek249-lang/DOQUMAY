@@ -442,6 +442,8 @@ h1, h2, p { margin: 0; }
   flex-direction: column;
   height: 100%;
   flex: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .wa-sidebar-header {
@@ -460,6 +462,189 @@ h1, h2, p { margin: 0; }
   align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+.wa-user-profile.clickable {
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  transition: background .15s;
+}
+.wa-user-profile.clickable:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* WhatsApp Profile Drawer (Slides over Sidebar) */
+.wa-profile-drawer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: #f0f2f5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 2px 0 14px rgba(0, 0, 0, 0.08);
+}
+
+.wa-profile-header {
+  height: 108px;
+  background: var(--wa-teal-dark);
+  color: #ffffff;
+  display: flex;
+  align-items: flex-end;
+  padding: 16px 20px;
+  gap: 18px;
+  flex: none;
+}
+
+.wa-profile-back-btn {
+  background: transparent;
+  border: 0;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  transition: background .15s;
+}
+.wa-profile-back-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.wa-profile-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.wa-profile-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.wa-profile-avatar-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0 16px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--wa-border);
+}
+
+.wa-profile-section {
+  background: #ffffff;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.wa-profile-label {
+  font-size: 0.78rem;
+  color: var(--wa-teal);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.wa-profile-val {
+  font-size: 1.05rem;
+  color: #111b21;
+}
+
+.wa-profile-caption {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.wa-profile-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.wa-profile-drop-section {
+  gap: 10px;
+}
+
+.wa-profile-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.wa-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  border: 1px solid var(--wa-border);
+  background: #ffffff;
+  color: #111b21;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.wa-profile-btn:hover {
+  background: #f5f6f6;
+  border-color: #c0c6c9;
+}
+.wa-profile-btn.primary {
+  background: var(--wa-teal);
+  color: #ffffff;
+  border-color: transparent;
+}
+.wa-profile-btn.primary:hover {
+  background: var(--wa-teal-dark);
+}
+
+.wa-profile-bottom-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.wa-profile-link-btn {
+  background: #f6f8f5;
+  border: 1px solid var(--wa-border);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #111b21;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.wa-profile-link-btn:hover {
+  background: #ebebeb;
+}
+.wa-profile-link-btn.danger {
+  color: #ba1a1a;
+  background: #fff6f6;
+  border-color: #fed8d8;
+}
+.wa-profile-link-btn.danger:hover {
+  background: #fee7e7;
 }
 
 .wa-user-text {

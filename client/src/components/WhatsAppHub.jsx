@@ -113,6 +113,7 @@ export default function WhatsAppHub({
   const [selectedKey, setSelectedKey] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [previewDrop, setPreviewDrop] = useState(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   // Group all drops by senderName (e.g. "Alice", "Bob", "John")
   const senderGroups = useMemo(() => {
@@ -205,9 +206,129 @@ export default function WhatsAppHub({
     <div className={`wa-container ${activeGroup ? 'wa-has-active-chat' : 'wa-no-active-chat'}`}>
       {/* ================= LEFT SIDEBAR (CHATS / SENDER LIST) ================= */}
       <aside className="wa-sidebar">
+        {/* User Profile Drawer (WhatsApp Web style slide-over) */}
+        <AnimatePresence>
+          {showProfile && (
+            <motion.div
+              className="wa-profile-drawer"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            >
+              <header className="wa-profile-header">
+                <button
+                  type="button"
+                  className="wa-profile-back-btn"
+                  onClick={() => setShowProfile(false)}
+                  aria-label="Back to chats"
+                >
+                  <BackIcon width={22} height={22} />
+                </button>
+                <h3>Profile</h3>
+              </header>
+
+              <div className="wa-profile-body">
+                {/* Large Profile Avatar */}
+                <div className="wa-profile-avatar-wrap">
+                  <Avatar name={account.displayName || account.username} size={110} />
+                </div>
+
+                {/* Display Name Section */}
+                <div className="wa-profile-section">
+                  <span className="wa-profile-label">Your Name</span>
+                  <b className="wa-profile-val">{account.displayName || account.username}</b>
+                  <span className="wa-profile-caption">
+                    This is your public display name shown to file senders.
+                  </span>
+                </div>
+
+                {/* Username Section */}
+                <div className="wa-profile-section">
+                  <span className="wa-profile-label">Username</span>
+                  <b className="wa-profile-val">@{account.username}</b>
+                  <span className="wa-profile-status-badge">
+                    <span className={`wa-status-dot ${connected ? 'online' : ''}`} />
+                    {connected ? 'Active & Receiving Files 24/7' : 'Connecting…'}
+                  </span>
+                </div>
+
+                {/* Permanent Drop-box Link & Share (Moved here from the main sidebar!) */}
+                <div className="wa-profile-section wa-profile-drop-section">
+                  <div className="wa-share-badge">
+                    <span className="wa-pulse-dot" /> Permanent Drop-box Active
+                  </div>
+                  <p className="wa-share-desc">
+                    Anyone can scan your permanent QR code or visit your link to drop files directly into your WhatsApp Hub:
+                  </p>
+
+                  <div className="wa-share-pill" onClick={handleCopyLink} title="Click to copy link">
+                    <code>{window.location.host}/?to={account.username}</code>
+                    <button type="button" className="wa-share-copy-btn" aria-label="Copy link">
+                      <CopyIcon width={15} height={15} />
+                    </button>
+                  </div>
+
+                  <div className="wa-profile-actions">
+                    <button
+                      type="button"
+                      className="wa-profile-btn primary"
+                      onClick={() => {
+                        setShowProfile(false);
+                        onPermanentQr();
+                      }}
+                    >
+                      <QrIcon width={16} height={16} /> Show QR Code
+                    </button>
+                    <button
+                      type="button"
+                      className="wa-profile-btn"
+                      onClick={handleCopyLink}
+                    >
+                      <CopyIcon width={15} height={15} /> Copy Link
+                    </button>
+                  </div>
+                </div>
+
+                {/* Actions: View toggle & Logout */}
+                <div className="wa-profile-section">
+                  <div className="wa-profile-bottom-actions">
+                    <button
+                      type="button"
+                      className="wa-profile-link-btn"
+                      onClick={() => {
+                        setShowProfile(false);
+                        onToggleClassic();
+                      }}
+                    >
+                      📱 Switch to Simple View
+                    </button>
+                    <button
+                      type="button"
+                      className="wa-profile-link-btn danger"
+                      onClick={onLogout}
+                    >
+                      🚪 Log Out of @{account.username}
+                    </button>
+                  </div>
+                  <p className="fine" style={{ marginTop: '12px' }}>
+                    🔒 Files sent to your WhatsApp Hub auto-delete 10 minutes after delivery.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* User profile & quick action bar */}
         <header className="wa-sidebar-header">
-          <div className="wa-user-profile" title={`Signed in as @${account.username}`}>
+          <div
+            className="wa-user-profile clickable"
+            onClick={() => setShowProfile(true)}
+            title="Click to view Profile & Permanent Drop-box Link"
+            role="button"
+            tabIndex={0}
+          >
             <Avatar name={account.displayName || account.username} size={42} />
             <div className="wa-user-text">
               <span className="wa-user-name">{account.displayName || account.username}</span>
@@ -242,11 +363,11 @@ export default function WhatsAppHub({
             <button
               type="button"
               className="wa-icon-action"
-              onClick={onToggleClassic}
-              title="Switch to Simple View"
-              aria-label="Switch to Simple View"
+              onClick={() => setShowProfile(true)}
+              title="My Profile"
+              aria-label="My Profile"
             >
-              📱
+              👤
             </button>
             <button
               type="button"
@@ -259,20 +380,6 @@ export default function WhatsAppHub({
             </button>
           </div>
         </header>
-
-        {/* Drop-box permanent link banner */}
-        <div className="wa-share-banner">
-          <div className="wa-share-badge">
-            <span className="wa-pulse-dot" /> Permanent Drop-box Active
-          </div>
-          <p className="wa-share-desc">Anyone can scan your QR or visit your link to send you files:</p>
-          <div className="wa-share-pill" onClick={handleCopyLink} title="Click to copy link">
-            <code>documay.com/?to={account.username}</code>
-            <button type="button" className="wa-share-copy-btn" aria-label="Copy link">
-              <CopyIcon width={14} height={14} />
-            </button>
-          </div>
-        </div>
 
         {/* Search Bar */}
         <div className="wa-search-bar">
