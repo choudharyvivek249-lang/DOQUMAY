@@ -588,7 +588,7 @@ export default function WhatsAppHub({
                 <div className="wa-ph-card" onClick={handleCopyLink}>
                   <div className="wa-ph-icon">🔗</div>
                   <b>Shareable Link</b>
-                  <span>Copy your personalized link: <code>documay.com/?to={account.username}</code></span>
+                  <span>Copy your personalized link: <code>{(typeof window !== 'undefined' ? window.location.host : 'documay.com')}/?to={account.username}</code></span>
                 </div>
                 <div className="wa-ph-card" onClick={onScan}>
                   <div className="wa-ph-icon">📸</div>
