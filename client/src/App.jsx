@@ -82,9 +82,31 @@ export default function App() {
     if (to) {
       const clean = to.replace(/^@/, '');
       setDropTarget(clean);
-      setOverlay('drop');
+
+      // Auto-set guest identity if visitor has no name yet
+      if (!name) {
+        const guestDefault = 'Guest Sender';
+        try { sessionStorage.setItem(NAME_KEY, guestDefault); } catch {}
+        setName(guestDefault);
+      }
+
+      // Try real-time 4-digit PIN live pairing if server socket is connected
+      if (dm.connected) {
+        dm.scan(clean).then((res) => {
+          if (res?.offline) {
+            setOverlay('drop');
+          } else if (res?.ok) {
+            setOverlay(null);
+            window.history.replaceState({}, '', window.location.pathname);
+          } else {
+            setOverlay('drop');
+          }
+        });
+      } else {
+        setOverlay('drop');
+      }
     }
-  }, []);
+  }, [dm.connected]);
 
   // Temporary 1-to-1 QR token pairing: ?join=TOKEN
   useEffect(() => {
@@ -131,6 +153,19 @@ export default function App() {
     setOverlay(null);
   };
 
+  const handleDropComplete = (senderName, targetUser) => {
+    if (senderName) {
+      try { sessionStorage.setItem(NAME_KEY, senderName); } catch {}
+      setName(senderName);
+    }
+    setViewMode('whatsapp');
+    try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
+    setOverlay(null);
+    setDropTarget(null);
+    window.history.replaceState({}, '', window.location.pathname);
+    notify(`Files delivered to @${targetUser}! Viewing in your WhatsApp Hub.`);
+  };
+
   const handleScanResult = async (text) => {
     const target = parseScanTarget(text);
     if (!target) return { ok: false, error: 'Unrecognized QR code or link format.' };
@@ -168,6 +203,7 @@ export default function App() {
             guestName={!account ? name : null}
             connected={dm.connected}
             drops={dm.drops}
+            dropItems={dm.dropItems}
             onDismissDrop={dm.dismissDrop}
             onScan={() => setOverlay('scan')}
             onPermanentQr={() => {
@@ -265,6 +301,7 @@ export default function App() {
             onSendDrop={dm.sendDrop}
             dropItems={dm.dropItems}
             onClose={() => { setOverlay(null); setDropTarget(null); }}
+            onComplete={handleDropComplete}
           />
         )}
 

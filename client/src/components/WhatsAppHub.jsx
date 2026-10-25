@@ -23,15 +23,18 @@ import {
 function FileMessageBubble({ drop, onDismiss, onPreviewImage }) {
   const left = useCountdown(drop.expiresAt);
   const isImage = ['image/png', 'image/jpeg', 'image/webp'].includes(drop.mime) ||
-    ['png', 'jpg', 'jpeg', 'webp'].some((ext) => drop.name.toLowerCase().endsWith(ext));
+    ['png', 'jpg', 'jpeg', 'webp'].some((ext) => drop.name?.toLowerCase().endsWith(ext));
 
-  const downloadUrl = `/api/files/${encodeURIComponent(drop.id)}?key=${encodeURIComponent(drop.key)}`;
-  const previewUrl = `${downloadUrl}&inline=1`;
+  const downloadUrl = drop.key
+    ? `/api/files/${encodeURIComponent(drop.id)}?key=${encodeURIComponent(drop.key)}`
+    : null;
+  const previewUrl = downloadUrl ? `${downloadUrl}&inline=1` : null;
+  const isOut = drop.dir === 'out';
 
   return (
-    <div className="wa-bubble incoming">
+    <div className={`wa-bubble ${isOut ? 'outgoing' : 'incoming'}`}>
       <div className="wa-bubble-content">
-        {isImage && (
+        {isImage && previewUrl && (
           <div className="wa-bubble-image-wrap" onClick={() => onPreviewImage(drop, previewUrl)}>
             <img
               src={previewUrl}
@@ -63,24 +66,30 @@ function FileMessageBubble({ drop, onDismiss, onPreviewImage }) {
         </div>
 
         <div className="wa-bubble-actions">
-          <a
-            href={downloadUrl}
-            className="wa-btn-download"
-            target="_blank"
-            rel="noopener noreferrer"
-            download={drop.name}
-          >
-            <DownloadIcon width={15} height={15} /> Download
-          </a>
-          <button
-            type="button"
-            className="wa-btn-dismiss"
-            onClick={() => onDismiss(drop.id)}
-            title="Delete this file"
-            aria-label="Delete file"
-          >
-            <TrashIcon width={14} height={14} />
-          </button>
+          {downloadUrl ? (
+            <a
+              href={downloadUrl}
+              className="wa-btn-download"
+              target="_blank"
+              rel="noopener noreferrer"
+              download={drop.name}
+            >
+              <DownloadIcon width={15} height={15} /> Download
+            </a>
+          ) : (
+            <span className="wa-status-pill sent">✓ Delivered</span>
+          )}
+          {onDismiss && !isOut && (
+            <button
+              type="button"
+              className="wa-btn-dismiss"
+              onClick={() => onDismiss(drop.id)}
+              title="Delete this file"
+              aria-label="Delete file"
+            >
+              <TrashIcon width={14} height={14} />
+            </button>
+          )}
         </div>
 
         <div className="wa-bubble-foot">
@@ -103,6 +112,7 @@ export default function WhatsAppHub({
   guestName,
   connected,
   drops = [],
+  dropItems = [],
   onDismissDrop,
   onScan,
   onPermanentQr,
@@ -123,9 +133,11 @@ export default function WhatsAppHub({
   const myDisplayName = account ? (account.displayName || account.username) : (guestName || 'Guest User');
   const myUsernameTag = account ? `@${account.username}` : 'Guest Mode';
 
-  // Group all drops by senderName (e.g. "Alice", "Bob", "John")
+  // Group all drops (inbound) and dropItems (outbound) by conversation partner
   const senderGroups = useMemo(() => {
     const map = new Map();
+
+    // 1. Inbound received files
     for (const drop of drops) {
       const rawName = (drop.senderName || 'Anonymous').trim();
       const key = rawName.toLowerCase();
@@ -140,12 +152,37 @@ export default function WhatsAppHub({
         });
       }
       const group = map.get(key);
-      group.drops.push(drop);
+      group.drops.push({ ...drop, dir: 'in' });
       if (drop.ts > group.latestTs) group.latestTs = drop.ts;
       group.totalBytes += drop.size || 0;
       if (drop.expiresAt && drop.expiresAt < group.minExpiresAt) {
         group.minExpiresAt = drop.expiresAt;
       }
+    }
+
+    // 2. Outbound sent files
+    for (const item of dropItems) {
+      const rawName = (item.toUsername || 'Recipient').trim();
+      const key = rawName.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          name: rawName,
+          drops: [],
+          latestTs: 0,
+          totalBytes: 0,
+          minExpiresAt: Infinity,
+        });
+      }
+      const group = map.get(key);
+      group.drops.push({
+        ...item,
+        dir: 'out',
+        senderName: 'You',
+        expiresAt: item.expiresAt || (item.ts + 600000),
+      });
+      if (item.ts > group.latestTs) group.latestTs = item.ts;
+      group.totalBytes += item.size || 0;
     }
 
     // Sort drops inside each group by chronological order
@@ -155,7 +192,14 @@ export default function WhatsAppHub({
 
     // Sort senders list by latest activity descending
     return Array.from(map.values()).sort((a, b) => b.latestTs - a.latestTs);
-  }, [drops]);
+  }, [drops, dropItems]);
+
+  // Auto-select latest active conversation if none selected
+  useEffect(() => {
+    if (!selectedKey && senderGroups.length > 0) {
+      setSelectedKey(senderGroups[0].key);
+    }
+  }, [senderGroups.length]);
 
   // Filtered senders based on search query
   const filteredSenders = useMemo(() => {

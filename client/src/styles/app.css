@@ -1168,6 +1168,9 @@ h1, h2, p { margin: 0; }
 .wa-bubble.incoming {
   justify-content: flex-start;
 }
+.wa-bubble.outgoing {
+  justify-content: flex-end;
+}
 
 .wa-bubble-content {
   position: relative;
@@ -1194,6 +1197,35 @@ h1, h2, p { margin: 0; }
   height: 0;
   border-top: 8px solid #ffffff;
   border-left: 8px solid transparent;
+}
+
+.wa-bubble.outgoing .wa-bubble-content {
+  background: #d9fdd3;
+  border-top-right-radius: 0;
+  border-top-left-radius: 10px;
+}
+.wa-bubble.outgoing .wa-bubble-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 0;
+  height: 0;
+  border-top: 8px solid #d9fdd3;
+  border-right: 8px solid transparent;
+}
+
+.wa-status-pill.sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 99px;
 }
 
 /* Image Inside Bubble */

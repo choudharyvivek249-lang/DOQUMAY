@@ -6,7 +6,13 @@ import { CloseIcon, FileIcon, UploadIcon } from './Icons';
 
 const SENDER_NAME_KEY = 'documay:lastSenderName';
 
-export default function DropBoxModal({ targetUsername, defaultSenderName, onSendDrop, onClose }) {
+export default function DropBoxModal({
+  targetUsername,
+  defaultSenderName,
+  onSendDrop,
+  onClose,
+  onComplete,
+}) {
   const [targetInfo, setTargetInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [senderName, setSenderName] = useState(() => {
@@ -19,6 +25,11 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
   const [completed, setCompleted] = useState(false);
   const [sentCount, setSentCount] = useState(0);
   const [error, setError] = useState('');
+
+  // 4-Digit Device Security PIN protection before first file share
+  const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+  const [pinError, setPinError] = useState('');
+  const pinInputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -43,6 +54,37 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
     loadInfo();
   }, [targetUsername]);
 
+  // Handle 4-digit PIN input changes with auto-advance and backspace
+  const handlePinChange = (idx, value) => {
+    setPinError('');
+    const clean = value.replace(/[^0-9]/g, '');
+
+    // Handle full 4-digit paste
+    if (clean.length >= 4) {
+      const parts = clean.slice(0, 4).split('');
+      setPinDigits(parts);
+      pinInputRefs[3].current?.focus();
+      return;
+    }
+
+    const single = clean.slice(-1);
+    const updated = [...pinDigits];
+    updated[idx] = single;
+    setPinDigits(updated);
+
+    if (single && idx < 3) {
+      pinInputRefs[idx + 1].current?.focus();
+    }
+  };
+
+  const handlePinKeyDown = (idx, e) => {
+    if (e.key === 'Backspace' && !pinDigits[idx] && idx > 0) {
+      pinInputRefs[idx - 1].current?.focus();
+    }
+  };
+
+  const isPinComplete = pinDigits.every((d) => d !== '');
+
   const addFiles = (newFiles) => {
     const list = Array.from(newFiles || []);
     if (!list.length) return;
@@ -55,6 +97,10 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
     }
     setError('');
     setSelectedFiles((prev) => [...prev, ...list]);
+    // Focus first PIN digit if not filled yet
+    if (!isPinComplete) {
+      setTimeout(() => pinInputRefs[0].current?.focus(), 200);
+    }
   };
 
   const removeFile = (index) => {
@@ -63,9 +109,16 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
 
   const handleSend = async () => {
     if (!selectedFiles.length) return;
+
+    if (!isPinComplete) {
+      setPinError('Please enter a 4-digit Security PIN to safely authorize document sharing.');
+      pinInputRefs[0].current?.focus();
+      return;
+    }
+
     setSending(true);
     setError('');
-    const finalSenderName = senderName.trim() || 'Visitor';
+    const finalSenderName = senderName.trim() || 'Guest Sender';
     try {
       localStorage.setItem(SENDER_NAME_KEY, finalSenderName);
     } catch { /* ignore */ }
@@ -74,7 +127,7 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
       let count = 0;
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
-        setProgressText(`Sending ${i + 1} of ${selectedFiles.length}: ${file.name}`);
+        setProgressText(`Securing & sending ${i + 1} of ${selectedFiles.length}: ${file.name}`);
         setProgressPercent(10);
 
         const res = await onSendDrop(
@@ -98,6 +151,11 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
       setCompleted(true);
       setSelectedFiles([]);
       setProgressPercent(100);
+
+      // Auto-navigate sender to WhatsApp Hub after 1.5 seconds!
+      setTimeout(() => {
+        onComplete?.(finalSenderName, targetUsername);
+      }, 1500);
     } catch {
       setError('An error occurred during transfer. Please check connection and try again.');
     } finally {
@@ -130,7 +188,7 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
 
         {/* Google Lens / QR Scanner badge */}
         <div className="google-lens-tag">
-          <span>📷 Scanned via QR Code / Google Lens</span>
+          <span>📷 Scanned via QR Standee / Google Lens</span>
         </div>
 
         {loading ? (
@@ -161,32 +219,25 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
             </div>
 
             <p className="lede text-center">
-              Files you drop will be delivered directly into <b>@{targetUsername}’s WhatsApp Senders Hub</b>.
+              Documents are secured with a 4-digit PIN and delivered directly into <b>@{targetUsername}’s WhatsApp Hub</b>.
             </p>
 
             {completed ? (
-              /* Success confirmation state */
+              /* Success confirmation state - Auto navigates to WhatsApp Hub */
               <div className="drop-success">
                 <div className="success-icon">✓</div>
                 <h3>Delivered to @{targetUsername}!</h3>
                 <p className="fine">
-                  <b>{sentCount} file{sentCount > 1 ? 's' : ''}</b> securely transferred. @{targetUsername} has
-                  been notified and can preview or download them in their WhatsApp Hub.
+                  <b>{sentCount} file{sentCount > 1 ? 's' : ''}</b> securely transferred. Opening your WhatsApp Hub conversation…
                 </p>
-                <div className="btn-group" style={{ width: '100%' }}>
-                  <button
-                    className="btn btn-pill"
-                    onClick={() => {
-                      setCompleted(false);
-                      setProgressPercent(0);
-                    }}
-                  >
-                    Send More Files
-                  </button>
-                  <button className="btn btn-primary" onClick={onClose}>
-                    Done
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => onComplete?.(senderName.trim() || 'Guest Sender', targetUsername)}
+                  style={{ width: '100%', marginTop: '12px' }}
+                >
+                  💬 Open WhatsApp Hub Now
+                </button>
               </div>
             ) : (
               /* Drop form */
@@ -199,7 +250,7 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
                     type="text"
                     value={senderName}
                     onChange={(e) => setSenderName(e.target.value)}
-                    placeholder="e.g. Rahul Sharma (optional)"
+                    placeholder="e.g. Rahul Sharma"
                     maxLength={24}
                   />
                 </label>
@@ -214,7 +265,7 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
                   >
                     <span className="drop-picker-icon">📸</span>
                     <b>Take Photo</b>
-                    <span className="sub">Use camera</span>
+                    <span className="sub">Camera</span>
                   </button>
 
                   <button
@@ -257,8 +308,8 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
                   <UploadIcon width={32} height={32} />
                   <b>
                     {selectedFiles.length
-                      ? `${selectedFiles.length} file(s) ready to send`
-                      : 'Or tap here to browse documents & photos'}
+                      ? `${selectedFiles.length} file(s) selected`
+                      : 'Tap here to browse documents & photos'}
                   </b>
                   <span className="fine">PNG, JPG, PDF, Word, Excel, PowerPoint (up to 100 MB)</span>
                 </div>
@@ -286,6 +337,62 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
                   </div>
                 )}
 
+                {/* 4-Digit Security PIN Section (Guarantees document & device safety) */}
+                <div className="drop-pin-security-wrap" style={{
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: '18px',
+                  padding: '14px',
+                  margin: '10px 0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.3rem' }}>🛡️</span>
+                    <b style={{ fontSize: '0.88rem', color: '#1e293b' }}>
+                      4-Digit Device Security PIN
+                    </b>
+                  </div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                    Enter any 4-digit PIN to secure your documents on this device before sending:
+                  </span>
+
+                  <div className="security-pin-inputs-row" style={{ margin: '4px 0' }}>
+                    {pinDigits.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={pinInputRefs[idx]}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handlePinChange(idx, e.target.value)}
+                        onKeyDown={(e) => handlePinKeyDown(idx, e)}
+                        disabled={sending}
+                        className="security-pin-input-box"
+                        style={{ width: '48px', height: '54px', fontSize: '1.6rem' }}
+                        autoComplete="off"
+                      />
+                    ))}
+                  </div>
+
+                  {pinError && (
+                    <span style={{ fontSize: '0.78rem', color: '#dc2626', fontWeight: 700 }}>
+                      ⚠️ {pinError}
+                    </span>
+                  )}
+
+                  {isPinComplete && (
+                    <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 700 }}>
+                      🔒 Device PIN verified for this transfer
+                    </span>
+                  )}
+                </div>
+
                 {/* Live upload progress bar */}
                 {sending && (
                   <div className="drop-progress-box">
@@ -306,10 +413,14 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
                 <motion.button
                   className="btn btn-primary"
                   onClick={handleSend}
-                  disabled={sending || selectedFiles.length === 0}
+                  disabled={sending || selectedFiles.length === 0 || !isPinComplete}
                   whileTap={{ scale: 0.97 }}
                 >
-                  {sending ? 'Sending Files…' : `Send ${selectedFiles.length || ''} File(s) to @${targetUsername}`}
+                  {sending
+                    ? 'Securing & Sending…'
+                    : !isPinComplete
+                    ? 'Enter 4-Digit PIN to Send'
+                    : `Send ${selectedFiles.length || ''} File(s) to @${targetUsername}`}
                 </motion.button>
               </div>
             )}
