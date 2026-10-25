@@ -243,6 +243,14 @@ export function useDocumay(name, notify, account) {
     await call('file:cancel', { id });
   }, [call]);
 
+  const leave = useCallback(async () => {
+    if (roomRef.current?.id) {
+      await call('room:leave', { roomId: roomRef.current.id });
+    }
+    setRoom(null);
+    setItems([]);
+  }, [call]);
+
   const verifyPin = useCallback(async (pin) => {
     const res = await call('room:verify_pin', { pin });
     if (!res.ok) {
