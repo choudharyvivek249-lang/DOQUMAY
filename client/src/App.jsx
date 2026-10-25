@@ -61,18 +61,26 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // URL routing for ?join=TOKEN and ?to=USERNAME / ?u=USERNAME
-  const initialParams = useRef(new URLSearchParams(window.location.search));
+  // URL routing for Google Lens / camera QR scans: ?to=USER, ?u=USER, /to/USER, or /@USER
   useEffect(() => {
-    const to = initialParams.current.get('to') || initialParams.current.get('u');
-    const join = initialParams.current.get('join');
-
+    const params = new URLSearchParams(window.location.search);
+    let to = params.get('to') || params.get('u');
+    if (!to) {
+      const pathMatch = window.location.pathname.match(/^\/(?:to\/|u\/|@)([a-zA-Z0-9_-]+)/);
+      if (pathMatch) to = pathMatch[1];
+    }
     if (to) {
-      setDropTarget(to.replace(/^@/, ''));
+      const clean = to.replace(/^@/, '');
+      setDropTarget(clean);
       setOverlay('drop');
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (join && dm.connected) {
-      initialParams.current = new URLSearchParams();
+    }
+  }, []);
+
+  // Temporary 1-to-1 QR token pairing: ?join=TOKEN
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const join = params.get('join');
+    if (join && dm.connected) {
       window.history.replaceState({}, '', window.location.pathname);
       dm.scan(join).then((r) => {
         if (!r?.ok && r?.error) notify(r.error);

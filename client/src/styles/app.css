@@ -234,8 +234,22 @@ h1, h2, p { margin: 0; }
 .icon-btn-sm { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; border: 0; background: rgba(0, 0, 0, 0.05); color: var(--ink); flex: none; }
 .btn-group { display: flex; flex-direction: column; gap: 10px; width: 100%; }
 
-/* Drop-box Modal */
-.drop-sheet { gap: 16px; }
+/* Drop-box Modal (Optimized for QR Code & Google Lens scans) */
+.drop-sheet { gap: 16px; max-height: 90vh; overflow-y: auto; }
+.google-lens-tag {
+  align-self: center;
+  background: #e8f0fe;
+  color: #1a73e8;
+  border: 1px solid #cce0ff;
+  border-radius: 99px;
+  padding: 4px 14px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
 .drop-target-header { display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .drop-target-info { display: flex; flex-direction: column; line-height: 1.3; }
 .drop-target-info h3 { margin: 0; font-size: 1.15rem; }
@@ -243,13 +257,98 @@ h1, h2, p { margin: 0; }
 .status-badge { align-self: flex-start; margin-top: 4px; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
 .status-badge.online { background: #dceada; color: #2e6024; }
 .status-badge.dropbox { background: var(--magenta-soft); color: var(--magenta-deep); }
-.drop-zone { border: 2px dashed var(--olive); border-radius: 20px; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; cursor: pointer; background: rgba(255, 255, 255, 0.6); transition: background .15s; }
+
+/* Quick Action Pickers: Camera & Gallery */
+.drop-picker-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+}
+.drop-picker-btn {
+  background: #ffffff;
+  border: 2px solid var(--olive);
+  border-radius: 16px;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(79, 96, 73, 0.08);
+  transition: transform .15s, background .15s, border-color .15s;
+}
+.drop-picker-btn:hover {
+  background: #f6f8f5;
+  border-color: var(--olive-deep);
+  transform: translateY(-1px);
+}
+.drop-picker-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.drop-picker-btn b {
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+.drop-picker-btn .sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.drop-zone { border: 2px dashed var(--olive); border-radius: 18px; padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; cursor: pointer; background: rgba(255, 255, 255, 0.6); transition: background .15s; }
 .drop-zone:hover { background: rgba(255, 255, 255, 0.95); }
-.drop-form { display: flex; flex-direction: column; gap: 14px; }
-.selected-list { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; padding: 4px; }
+.drop-form { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+
+.selected-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; padding: 4px; }
 .selected-item { display: flex; align-items: center; gap: 10px; background: #fff; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-size: 0.88rem; }
 .selected-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .selected-size { font-size: 0.78rem; color: var(--muted); flex: none; }
+.selected-remove { width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgba(0,0,0,0.06); color: #888; display: grid; place-items: center; cursor: pointer; flex: none; transition: background .15s, color .15s; }
+.selected-remove:hover { background: #fee7e7; color: #ba1a1a; }
+
+/* Upload Progress Box */
+.drop-progress-box {
+  background: #f0f7f3;
+  border: 1px solid #d4f2e2;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.drop-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--wa-teal-dark);
+}
+.drop-progress-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80%;
+}
+.drop-progress-pct {
+  color: var(--wa-teal);
+}
+.drop-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #d4e9df;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.drop-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #25d366, #00a884);
+  border-radius: 99px;
+  transition: width .2s ease;
+}
+
 .drop-success { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 12px 0; }
 .success-icon { width: 56px; height: 56px; border-radius: 50%; background: #4f6049; color: #fff; font-size: 1.8rem; display: grid; place-items: center; font-weight: 800; }
 

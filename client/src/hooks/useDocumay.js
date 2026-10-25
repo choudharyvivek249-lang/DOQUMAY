@@ -44,26 +44,30 @@ export function useDocumay(name, notify, account) {
   }), []);
 
   /* Streams one accepted file to the server in 512 KB chunks */
-  const upload = useCallback(async (id) => {
+  const upload = useCallback(async (id, onProgress) => {
     const file = files.current.get(id);
-    if (!file) return;
+    if (!file) return { ok: false, error: 'File not found' };
     const abort = async (msg) => {
-      if (stopped.current.has(id)) return;
+      if (stopped.current.has(id)) return { ok: false, error: 'Cancelled' };
       patch(id, { status: 'failed' });
       notifyRef.current(msg);
       await call('file:cancel', { id });
+      return { ok: false, error: msg };
     };
     let offset = 0;
     while (offset < file.size) {
-      if (stopped.current.has(id)) return;
+      if (stopped.current.has(id)) return { ok: false, error: 'Cancelled' };
       const data = await file.slice(offset, offset + CHUNK).arrayBuffer();
       const res = await call('file:chunk', { id, offset, data });
       if (!res.ok) return abort(res.error);
       offset += data.byteLength;
+      if (onProgress) onProgress(offset, file.size);
     }
     const done = await call('file:complete', { id });
     if (!done.ok) return abort(done.error);
     files.current.delete(id);
+    patch(id, { status: 'ready', received: file.size });
+    return { ok: true };
   }, [call, patch]);
 
   const fetchDrops = useCallback(async () => {
@@ -73,27 +77,29 @@ export function useDocumay(name, notify, account) {
   }, [call]);
 
   useEffect(() => {
-    if (!name) return undefined;
+    // Connect socket immediately so Google Lens and drop visitors can transfer files without delay
     const socket = io(SERVER, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('session:start', {
-        name,
-        username: account?.username,
-        token: account?.token,
-      }, (res) => {
-        if (res?.ok) {
-          setConnected(true);
-          if (account?.username) {
-            socket.emit('account:get_drops', {}, (dropRes) => {
-              if (dropRes?.ok) setDrops(dropRes.drops || []);
-            });
+      setConnected(true);
+      if (name) {
+        socket.emit('session:start', {
+          name,
+          username: account?.username,
+          token: account?.token,
+        }, (res) => {
+          if (res?.ok) {
+            if (account?.username) {
+              socket.emit('account:get_drops', {}, (dropRes) => {
+                if (dropRes?.ok) setDrops(dropRes.drops || []);
+              });
+            }
+          } else {
+            notifyRef.current(res?.error || 'Could not start your session.');
           }
-        } else {
-          notifyRef.current(res?.error || 'Could not start your session.');
-        }
-      });
+        });
+      }
     });
 
     socket.on('disconnect', () => {
@@ -171,7 +177,7 @@ export function useDocumay(name, notify, account) {
     }
   }, [call]);
 
-  const sendDrop = useCallback(async (toUsername, file, senderName) => {
+  const sendDrop = useCallback(async (toUsername, file, senderName, onProgress) => {
     const problem = validateFile(file);
     if (problem) { notifyRef.current(`${file.name}: ${problem}`); return { ok: false, error: problem }; }
     const res = await call('drop:offer', { toUsername, name: file.name, size: file.size, senderName });
@@ -180,8 +186,8 @@ export function useDocumay(name, notify, account) {
     setDropItems((l) => [...l, {
       id: res.id, name: file.name, size: file.size, toUsername, ts: res.ts, status: 'accepted', received: 0,
     }]);
-    upload(res.id);
-    return { ok: true, id: res.id };
+    const up = await upload(res.id, onProgress);
+    return up.ok ? { ok: true, id: res.id } : up;
   }, [call, upload]);
 
   const dismissDrop = useCallback(async (id) => {

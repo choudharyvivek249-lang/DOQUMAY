@@ -327,7 +327,7 @@ export function registerHandlers(io) {
       if (!t || !IN_FLIGHT.has(t.status)) return fail(ack, 'Nothing to cancel.');
       await finish(io, t, 'cancelled');
       reply(ack, { ok: true });
-    });
+    }, { needsUser: false });
 
     on('file:chunk', async ({ id, offset, data }, ack) => {
       const t = owned(id, 'senderId');
@@ -347,7 +347,7 @@ export function registerHandlers(io) {
       }
       emitUpdate(io, t);
       reply(ack, { ok: true, received: t.received });
-    });
+    }, { needsUser: false });
 
     on('file:complete', async ({ id }, ack) => {
       const t = owned(id, 'senderId');
@@ -359,7 +359,7 @@ export function registerHandlers(io) {
       t.expiresAt = Date.now() + FILE_TTL_MS; // the 10-minute clock starts when the file lands
       emitUpdate(io, t);
       reply(ack, { ok: true });
-    });
+    }, { needsUser: false });
 
     /* ---------- disconnect ---------- */
     socket.on('disconnect', () => {
