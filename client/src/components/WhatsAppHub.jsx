@@ -573,7 +573,7 @@ export default function WhatsAppHub({
                 <span className="wa-big-icon">💬</span>
                 <span className="wa-sub-icon">⚡</span>
               </div>
-              <h2>Documay Permanent Hub</h2>
+              <h2>DoquMay Permanent Hub</h2>
               <p className="wa-placeholder-desc">
                 View, manage, and download incoming files from multiple senders simultaneously with a
                 WhatsApp-style conversation interface.

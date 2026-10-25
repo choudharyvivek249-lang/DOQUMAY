@@ -35,7 +35,7 @@ export default function DropBoxModal({ targetUsername, defaultSenderName, onSend
           setError(data.error || 'Recipient not found.');
         }
       } catch {
-        setError('Could not reach the Documay server.');
+        setError('Could not reach the DoquMay server.');
       } finally {
         setLoading(false);
       }

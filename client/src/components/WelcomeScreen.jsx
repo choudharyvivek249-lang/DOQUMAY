@@ -1,14 +1,22 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { Logo } from './Icons';
+import { DoquMayLogo } from './Icons';
 
 export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
   const [value, setValue] = useState('');
   const clean = value.trim();
-  const submit = (e) => { e.preventDefault(); if (clean) onSubmit(clean); };
+  const submit = (e) => {
+    e.preventDefault();
+    if (clean) onSubmit(clean);
+  };
 
   return (
-    <motion.main className="screen center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.main
+      className="screen center welcome-screen-bg"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       <motion.form
         className="welcome"
         onSubmit={submit}
@@ -16,9 +24,23 @@ export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', damping: 22, stiffness: 220 }}
       >
-        <Logo size={64} />
-        <h1>Documay</h1>
-        <p className="lede">Send photos and documents by scanning a QR code. Ephemeral, secure, no spam.</p>
+        <DoquMayLogo size={76} />
+
+        <div className="welcome-brand-header">
+          <h1 className="welcome-h1">
+            <span className="brand-doqu">Doqu</span>
+            <span className="brand-may">May</span>
+          </h1>
+          <div className="welcome-tagline-badge">
+            ⚡ WORLD’S 1ST FASTEST &amp; EASIEST DOCUMENT SENDER
+          </div>
+        </div>
+
+        <p className="lede">
+          Send photos and documents instantly with a QR scan. Ephemeral, 100% secure, zero login.
+          <br />
+          <span className="welcome-not-money">📄 For Documents &amp; Files · Not For Money</span>
+        </p>
 
         <label className="field">
           <span>Quick Guest Display Name</span>
@@ -33,7 +55,7 @@ export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
         </label>
 
         <motion.button className="btn btn-primary" disabled={!clean} whileTap={{ scale: 0.97 }}>
-          Continue as Guest
+          ⚡ Start Sending with DoquMay
         </motion.button>
 
         <div className="welcome-divider">
@@ -48,8 +70,8 @@ export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
         >
           <span>✨</span>
           <div className="btn-col">
-            <b>Log In / Create Account</b>
-            <span className="sub">Get a Permanent QR Code that never expires</span>
+            <b>Log In / Create Free Account</b>
+            <span className="sub">Get a Permanent QR Standee that never expires</span>
           </div>
         </motion.button>
 

@@ -34,7 +34,7 @@ const io = new Server(server, {
 registerHandlers(io);
 startCleanup(io);
 
-server.listen(PORT, () => console.log(`Documay server on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`DoquMay server on http://localhost:${PORT}`));
 
 const shutdown = async () => { await wipeStorage(); process.exit(0); };
 process.on('SIGINT', shutdown);

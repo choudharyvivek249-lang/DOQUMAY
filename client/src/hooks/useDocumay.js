@@ -62,7 +62,7 @@ export function useDocumay(name, notify, account) {
       return;
     }
 
-    resolve({ ok: false, error: 'Connecting to Documay. Please wait a moment…' });
+    resolve({ ok: false, error: 'Connecting to DoquMay. Please wait a moment…' });
   }), []);
 
   /* Streams one accepted file to the server in 512 KB chunks */
@@ -128,7 +128,7 @@ export function useDocumay(name, notify, account) {
       setConnected(false);
       setRoom((r) => (r ? { ...r, peerOnline: false } : r));
     });
-    socket.on('connect_error', () => notifyRef.current('Can’t reach the Documay server.'));
+    socket.on('connect_error', () => notifyRef.current('Can’t reach the DoquMay server.'));
 
     socket.on('room:ready', ({ roomId, peer, role }) => {
       files.current.clear();
@@ -176,7 +176,7 @@ export function useDocumay(name, notify, account) {
 
   const scan = useCallback(async (text) => {
     const target = parseScanTarget(text);
-    if (!target) return { ok: false, error: 'That doesn’t look like a Documay QR code or user link.' };
+    if (!target) return { ok: false, error: 'That doesn’t look like a DoquMay QR code or user link.' };
     if (target.type === 'token') {
       return call('qr:scan', { token: target.token });
     }

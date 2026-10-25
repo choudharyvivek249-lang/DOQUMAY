@@ -43,7 +43,7 @@ export default function QRScanner({ onResult, onClose }) {
     <motion.div className="scanner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" aria-label="Scan a QR code">
       <div className="scanner-top">
         <button className="icon-btn dark" onClick={onClose} aria-label="Close scanner"><CloseIcon /></button>
-        <b>Scan a Documay QR</b>
+        <b>Scan a DoquMay QR</b>
       </div>
       <div className="viewfinder">
         <div id={READER_ID} />

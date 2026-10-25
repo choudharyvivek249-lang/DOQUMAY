@@ -63,7 +63,7 @@ export default function HomeScreen({
           <ScanIcon width={54} height={54} strokeWidth={1.8} />
           <span>Scan QR</span>
         </motion.button>
-        <p className="hint">Point your camera at any temporary or permanent Documay code to transfer files.</p>
+        <p className="hint">Point your camera at any temporary or permanent DoquMay code to transfer files.</p>
       </section>
 
       <div className="qr-options-grid">

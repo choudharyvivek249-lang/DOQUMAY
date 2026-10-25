@@ -1588,3 +1588,356 @@ h1, h2, p { margin: 0; }
   }
 }
 
+/* ================= DOQUMAY FINTECH & SUPERHERO SURPRISE QR STANDEE ================= */
+.hero-qr-sheet {
+  max-width: 500px;
+  max-height: 94vh;
+  overflow-y: auto;
+  gap: 12px;
+  background: #ffffff;
+  padding: 24px 20px max(24px, env(safe-area-inset-bottom));
+}
+
+.doqumay-tagline-badge {
+  background: linear-gradient(135deg, #4A0E78 0%, #5F259F 50%, #0066FF 100%);
+  color: #00F5A0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 6px 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(95, 37, 159, 0.25);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.standee-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 6px;
+}
+
+.standee-title-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.brand-h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-doqu {
+  color: #111b21;
+}
+
+.brand-may {
+  background: linear-gradient(135deg, #00D2FF 0%, #00F5A0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.standee-verified-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #00F5A0;
+  color: #042416;
+  padding: 2px 8px;
+  border-radius: 99px;
+  margin-left: 4px;
+}
+
+.standee-permanent-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #5F259F;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.standee-not-money-caption {
+  font-size: 0.78rem;
+  color: #54656f;
+  font-weight: 600;
+}
+.standee-not-money-caption b {
+  color: #5F259F;
+}
+
+/* Surprise Superhero / Anime Card */
+.surprise-hero-card {
+  width: 100%;
+  border-radius: 24px;
+  padding: 16px;
+  border: 2px solid;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.hero-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hero-avatar-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.hero-emoji {
+  font-size: 1.6rem;
+}
+
+.hero-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.hero-rarity-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.hero-rarity-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 99px;
+  border: 1px solid;
+}
+
+.hero-universe-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+
+.hero-name {
+  font-size: 1.05rem;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.hero-card-title {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-reroll-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  padding: 6px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.hero-reroll-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(1.04);
+}
+
+.hero-quote {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 0 8px 8px 0;
+  line-height: 1.35;
+}
+
+/* QR Code Inside Hero Card */
+.hero-qr-box {
+  background: #ffffff;
+  padding: 12px;
+  border-radius: 20px;
+  border: 2px solid;
+  margin: 0 auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.qr-inner-wrapper {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.qr-center-logo-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  padding: 4px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.standee-handle-badge {
+  align-self: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pulse-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00F5A0;
+  box-shadow: 0 0 8px #00F5A0;
+  animation: wa-pulse 1.6s infinite;
+}
+
+.hero-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 10px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-size: 0.78rem;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.hero-scan-hint {
+  font-size: 0.85rem;
+  color: #54656f;
+  text-align: center;
+  margin: 0;
+}
+.hero-scan-hint b {
+  color: #111b21;
+}
+
+.standee-btn-group {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.modal-actions-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.secondary-actions-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+/* Welcome Screen Brand Header */
+.welcome-brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+
+.welcome-h1 {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.welcome-tagline-badge {
+  background: linear-gradient(135deg, #4A0E78 0%, #5F259F 50%, #0066FF 100%);
+  color: #00F5A0;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 5px 14px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(95, 37, 159, 0.25);
+  text-align: center;
+}
+
+.welcome-not-money {
+  display: inline-block;
+  margin-top: 4px;
+  font-weight: 700;
+  color: #5F259F;
+  font-size: 0.82rem;
+}
+
