@@ -24,11 +24,12 @@ export default function WhatsAppHandoffModal({
 
   // Construct secure temporary download link
   const origin = window.location.origin;
-  const downloadUrl = primaryResult.key && primaryResult.id
-    ? `${origin}/api/files/${encodeURIComponent(primaryResult.id)}?key=${encodeURIComponent(primaryResult.key)}`
-    : `${origin}/?to=${encodeURIComponent(recipient.replace(/^@/, ''))}`;
-
   const cleanRecipient = recipient.replace(/^@/, '');
+  const downloadUrl = primaryResult.key && primaryResult.id
+
+    ? `${origin}/api/files/${encodeURIComponent(primaryResult.id)}?key=${encodeURIComponent(primaryResult.key)}`
+    : `${origin}/receive/${encodeURIComponent(cleanRecipient)}`;
+
   const filesCount = files.length || fileResults.length || 1;
   const fileNames = files.map((f) => f.name).join(', ') || primaryResult.name || 'document';
 

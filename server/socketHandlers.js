@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { consumeSendAuthorization, getUser, verifySendPin, verifyToken } from './accounts.js';
+import { consumeSendAuthorization, getUser, normalizeUsername, verifySendPin, verifyToken } from './accounts.js';
+
+
 import {
   ALLOWED_TYPES, CHUNK_MAX_BYTES, FILE_TTL_MS, MAX_ACTIVE_PER_USER, MAX_FILE_BYTES, MAX_STORE_BYTES, QR_TTL_MS,
 } from './config.js';
@@ -168,10 +170,13 @@ export function registerHandlers(io) {
 
       // Handle permanent QR code (@username)
       if (username) {
-        const target = getUser(username);
+        const clean = normalizeUsername(username);
+        if (!clean) return fail(ack, 'Invalid recipient username.');
+        const target = getUser(clean);
         if (!target) return fail(ack, 'That permanent QR account does not exist.');
         const targetKey = target.username.toLowerCase();
         if (user.username === targetKey) return fail(ack, 'That is your own permanent QR code.');
+
 
         const targetSockets = onlineAccounts.get(targetKey);
         const targetSocketId = targetSockets ? [...targetSockets][0] : null;

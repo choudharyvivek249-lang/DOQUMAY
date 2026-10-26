@@ -3,8 +3,11 @@ client/node_modules/
 server/node_modules/
 client/dist/
 server/data/accounts.json
+server/data/accounts.bak.json
+server/data/*.tmp
 .env
 .env.local
 *.log
 .DS_Store
 Thumbs.db
+

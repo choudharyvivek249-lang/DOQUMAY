@@ -335,10 +335,11 @@ export default function WhatsAppHub({
       onAuth?.();
       return;
     }
-    const link = `${window.location.origin}/?to=${account.username}`;
+    const link = `${window.location.origin}/receive/${account.username}`;
     navigator.clipboard.writeText(link);
     notify(`Copied personal Drop-box link: @${account.username}`);
   };
+
 
   return (
     <div className={`wa-container ${activeGroup ? 'wa-has-active-chat' : 'wa-no-active-chat'}`}>
@@ -408,11 +409,12 @@ export default function WhatsAppHub({
                     </p>
 
                     <div className="wa-share-pill" onClick={handleCopyLink} title="Click to copy link">
-                      <code>{window.location.host}/?to={account.username}</code>
+                      <code>{window.location.host}/receive/{account.username}</code>
                       <button type="button" className="wa-share-copy-btn" aria-label="Copy link">
                         <CopyIcon width={15} height={15} />
                       </button>
                     </div>
+
 
                     <div className="wa-profile-actions">
                       <button
@@ -919,8 +921,9 @@ export default function WhatsAppHub({
                     <div className="wa-ph-card" onClick={handleCopyLink}>
                       <div className="wa-ph-icon">🔗</div>
                       <b>Shareable Link</b>
-                      <span>Copy your personalized link: <code>{window.location.host}/?to={account?.username}</code></span>
+                      <span>Copy your personalized link: <code>{window.location.host}/receive/{account?.username}</code></span>
                     </div>
+
                     <div className="wa-ph-card" onClick={onScan}>
                       <div className="wa-ph-icon">📸</div>
                       <b>Live Camera Scanner</b>

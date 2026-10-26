@@ -5,11 +5,13 @@ import {
   changePin,
   getUser,
   loginUser,
+  normalizeUsername,
   recoverPinWithPassword,
   registerUser,
   verifySendPin,
   verifyToken,
 } from './accounts.js';
+
 import { IMAGE_EXT } from './config.js';
 import { onlineAccounts, transfers } from './state.js';
 import { filePath } from './storage.js';
@@ -75,14 +77,22 @@ router.post('/auth/recover-pin', async (req, res) => {
   res.json(result);
 });
 
-// User info: look up a permanent profile by username
+// User info: look up a permanent profile by username or handle
 router.get('/user/:username', (req, res) => {
-  const u = getUser(req.params.username);
-  if (!u) return res.status(404).json({ ok: false, error: 'User not found.' });
+  const rawParam = req.params.username;
+  const clean = normalizeUsername(rawParam);
+  if (!clean) {
+    return res.status(400).json({ ok: false, error: 'Invalid recipient username.' });
+  }
+  const u = getUser(clean);
+  if (!u) {
+    return res.status(404).json({ ok: false, error: 'User not found.' });
+  }
   const key = u.username.toLowerCase();
   const isOnline = onlineAccounts.has(key) && onlineAccounts.get(key).size > 0;
   res.json({ ok: true, user: { ...u, isOnline } });
 });
+
 
 // Pending drops for an authenticated user
 router.get('/drops', (req, res) => {

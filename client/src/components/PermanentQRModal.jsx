@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRef, useState } from 'react';
+import { cleanUsername } from '../utils/files';
 import { CloseIcon, CopyIcon, DOQUMAY_QR_LOGO_DATA_URI, DoquMayLogo, QrIcon, ShareIcon } from './Icons';
 
 export default function PermanentQRModal({ account, onClose }) {
@@ -8,8 +9,9 @@ export default function PermanentQRModal({ account, onClose }) {
   const [copied, setCopied] = useState(false);
   const qrRef = useRef(null);
 
-  const username = account?.username || '';
-  const permanentUrl = `${window.location.origin}/?to=${encodeURIComponent(username)}`;
+  const username = cleanUsername(account?.username || '');
+  const permanentUrl = `${window.location.origin}/receive/${encodeURIComponent(username)}`;
+
 
   const copy = async () => {
     try {
@@ -268,11 +270,12 @@ export default function PermanentQRModal({ account, onClose }) {
 
         {/* Recipient Handle Pill */}
         <div className="perm-url-pill" onClick={copy} title="Click to copy link">
-          <code>{window.location.host}/?to=@{username}</code>
+          <code>{window.location.host}/receive/{username}</code>
           <button type="button" className="icon-btn-sm" aria-label="Copy link">
             <CopyIcon width={16} height={16} />
           </button>
         </div>
+
 
         {/* Clean Action Buttons */}
         <div className="btn-group" style={{ marginTop: '0.85rem' }}>

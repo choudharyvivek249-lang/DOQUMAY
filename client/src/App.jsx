@@ -13,7 +13,7 @@ import TransferRoom from './components/TransferRoom';
 import WelcomeScreen from './components/WelcomeScreen';
 import WhatsAppHub from './components/WhatsAppHub';
 import { useDocumay } from './hooks/useDocumay';
-import { parseScanTarget } from './utils/files';
+import { cleanUsername, parseScanTarget } from './utils/files';
 
 const NAME_KEY = 'documay:name';
 const ACCOUNT_KEY = 'documay:account';
@@ -73,42 +73,31 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // URL routing for Google Lens / camera QR scans: ?to=USER, ?u=USER, /to/USER, or /@USER
+  // URL routing for Google Lens / camera QR scans: /receive/:user, ?to=USER, ?u=USER, /to/USER, or /@USER
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    let to = params.get('to') || params.get('u');
+    let to = params.get('to') || params.get('u') || params.get('user') || params.get('receive');
     if (!to) {
-      const pathMatch = window.location.pathname.match(/^\/(?:to\/|u\/|@)([a-zA-Z0-9_-]+)/);
+      const pathMatch = window.location.pathname.match(/^\/(?:receive\/|to\/|u\/|@)([^/?#]+)/i);
       if (pathMatch) to = pathMatch[1];
     }
     if (to) {
-      const clean = to.replace(/^@/, '');
-      setDropTarget(clean);
+      const clean = cleanUsername(to);
+      if (clean) {
+        setDropTarget(clean);
 
-      // Auto-set guest identity if visitor has no name yet
-      if (!name) {
-        const guestDefault = 'Guest Sender';
-        try { sessionStorage.setItem(NAME_KEY, guestDefault); } catch {}
-        setName(guestDefault);
-      }
+        // Auto-set guest identity if visitor has no name yet
+        if (!name) {
+          const guestDefault = 'Guest Sender';
+          try { sessionStorage.setItem(NAME_KEY, guestDefault); } catch {}
+          setName(guestDefault);
+        }
 
-      // Try real-time 4-digit PIN live pairing if server socket is connected
-      if (dm.connected) {
-        dm.scan(clean).then((res) => {
-          if (res?.offline) {
-            setOverlay('drop');
-          } else if (res?.ok) {
-            setOverlay(null);
-            window.history.replaceState({}, '', window.location.pathname);
-          } else {
-            setOverlay('drop');
-          }
-        });
-      } else {
         setOverlay('drop');
       }
     }
-  }, [dm.connected]);
+  }, []);
+
 
   // Temporary 1-to-1 QR token pairing: ?join=TOKEN
   useEffect(() => {

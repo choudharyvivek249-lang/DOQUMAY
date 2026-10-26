@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,12 +7,14 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
+const ACCOUNTS_BACKUP_FILE = path.join(DATA_DIR, 'accounts.bak.json');
+const SEED_ACCOUNTS_FILE = path.join(__dirname, 'data', 'accounts.seed.json');
 
 // Server-side pepper for low-entropy 4-digit PIN protection
 const PIN_PEPPER = process.env.PIN_PEPPER || 'doqumay-send-pin-pepper-secret-2026';
 
 // In-memory cache for fast lookups
-const accounts = new Map(); // lowercase username -> account object
+const accounts = new Map(); // lowercase normalized username -> account object
 
 // Send Authorizations map: sendAuthToken -> { id, username, recipient, fileCount, filesUsed, expiresAt, batchId }
 const sendAuthorizations = new Map();
@@ -26,37 +29,110 @@ async function ensureDataDir() {
   } catch { /* already exists */ }
 }
 
+/**
+ * Robust username normalization used everywhere in frontend and backend.
+ * Handles strings, URL decoding, leading '@', leading paths (/receive/, /to/),
+ * whitespace trimming, and lowercasing.
+ */
+export function normalizeUsername(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  let clean = raw.trim();
+  try {
+    clean = decodeURIComponent(clean);
+  } catch { /* use raw */ }
+  // Strip leading path segments like /receive/ or /to/ and all leading @ symbols
+  clean = clean.replace(/^(?:\/?(?:receive|to|u)\/)?@*/i, '').replace(/\/+$/, '').trim().toLowerCase();
+  return clean;
+}
+
 export async function loadAccounts() {
   await ensureDataDir();
+  let loaded = false;
+
+  // 1. Try reading primary accounts.json
   try {
-    const raw = await fs.readFile(ACCOUNTS_FILE, 'utf-8');
-    const list = JSON.parse(raw);
-    accounts.clear();
-    for (const u of list) {
-      if (u && u.username) {
-        accounts.set(u.username.toLowerCase(), u);
+    if (fsSync.existsSync(ACCOUNTS_FILE)) {
+      const raw = await fs.readFile(ACCOUNTS_FILE, 'utf-8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        accounts.clear();
+        for (const u of list) {
+          if (u && u.username) {
+            accounts.set(normalizeUsername(u.username), u);
+          }
+        }
+        loaded = true;
       }
     }
   } catch (err) {
-    if (err.code !== 'ENOENT') console.error('Error loading accounts:', err);
-    accounts.clear();
+    console.error('Error loading primary accounts.json:', err.message);
+  }
+
+  // 2. Fallback to backup if primary was corrupt or missing
+  if (!loaded || accounts.size === 0) {
+    try {
+      if (fsSync.existsSync(ACCOUNTS_BACKUP_FILE)) {
+        const raw = await fs.readFile(ACCOUNTS_BACKUP_FILE, 'utf-8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) {
+          for (const u of list) {
+            if (u && u.username) accounts.set(normalizeUsername(u.username), u);
+          }
+          loaded = true;
+          // Restore primary from backup
+          await saveAccounts();
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 3. Fallback to seed file if brand-new container instance
+  if (!loaded || accounts.size === 0) {
+    try {
+      if (fsSync.existsSync(SEED_ACCOUNTS_FILE)) {
+        const raw = await fs.readFile(SEED_ACCOUNTS_FILE, 'utf-8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const u of list) {
+            if (u && u.username) accounts.set(normalizeUsername(u.username), u);
+          }
+          await saveAccounts();
+        }
+      }
+    } catch { /* ignore */ }
   }
 }
 
+/**
+ * Atomically saves accounts to disk using a temp file and rename,
+ * ensuring no partial writes or corruption upon sudden process exit.
+ */
 export async function saveAccounts() {
   await ensureDataDir();
   const list = [...accounts.values()];
-  await fs.writeFile(ACCOUNTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  const json = JSON.stringify(list, null, 2);
+  const tmp = path.join(DATA_DIR, `.accounts.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
+  try {
+    await fs.writeFile(tmp, json, 'utf-8');
+    await fs.rename(tmp, ACCOUNTS_FILE);
+    // Write secondary backup asynchronously
+    fs.writeFile(ACCOUNTS_BACKUP_FILE, json, 'utf-8').catch(() => {});
+  } catch (err) {
+    console.error('Failed to save accounts atomically:', err.message);
+    try { await fs.writeFile(ACCOUNTS_FILE, json, 'utf-8'); } catch {}
+  }
 }
 
 export function validateUsername(username) {
   if (typeof username !== 'string') return 'Username is required.';
-  const clean = username.trim();
+  const clean = normalizeUsername(username);
+  if (!clean) return 'Username is required.';
   if (clean.length < 3) return 'Username must be at least 3 characters.';
   if (clean.length > 20) return 'Username must be 20 characters or fewer.';
   if (!/^[a-zA-Z0-9_-]+$/.test(clean)) return 'Username can only contain letters, numbers, hyphens, and underscores.';
   return null;
 }
+
 
 export function validatePassword(password) {
   if (!password || typeof password !== 'string' || password.length < 4) {
@@ -189,9 +265,9 @@ export async function registerUser(username, password, pin = '1234', confirmPin,
     }
   }
 
-  const cleanUser = username.trim();
-  const key = cleanUser.toLowerCase();
-  if (accounts.has(key)) {
+  const cleanUser = normalizeUsername(username);
+  const key = cleanUser;
+  if (accounts.has(key) || getUser(key)) {
     return { ok: false, error: 'That username is already taken. Please choose another.' };
   }
 
@@ -227,8 +303,12 @@ export async function registerUser(username, password, pin = '1234', confirmPin,
  */
 export async function loginUser(username, password, pin) {
   if (!username || !password) return { ok: false, error: 'Please enter your username and password.' };
-  const key = username.trim().toLowerCase();
-  const user = accounts.get(key);
+  const key = normalizeUsername(username);
+  let user = accounts.get(key);
+  if (!user) {
+    getUser(key);
+    user = accounts.get(key);
+  }
   if (!user) return { ok: false, error: 'Invalid username or password.' };
 
   const testHash = crypto.scryptSync(password, user.salt, 64).toString('hex');
@@ -255,13 +335,42 @@ export async function loginUser(username, password, pin) {
 
 export function verifyToken(username, token) {
   if (!username || !token) return false;
-  const user = accounts.get(username.trim().toLowerCase());
+  const key = normalizeUsername(username);
+  let user = accounts.get(key);
+  if (!user) {
+    getUser(key);
+    user = accounts.get(key);
+  }
   return Boolean(user && user.token === token);
 }
 
+/**
+ * Looks up a permanent recipient profile by username or handle.
+ * Normalizes case, removes leading '@', URL-decodes, and falls back to disk
+ * if the user record is not currently in memory.
+ */
 export function getUser(username) {
-  if (!username) return null;
-  const user = accounts.get(username.trim().toLowerCase());
+  const key = normalizeUsername(username);
+  if (!key) return null;
+  let user = accounts.get(key);
+  if (!user) {
+    // Disk fallback to ensure lookup works reliably after server restarts
+    try {
+      if (fsSync.existsSync(ACCOUNTS_FILE)) {
+        const raw = fsSync.readFileSync(ACCOUNTS_FILE, 'utf-8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const u of list) {
+            if (u && u.username) {
+              const k = normalizeUsername(u.username);
+              accounts.set(k, u);
+              if (k === key) user = u;
+            }
+          }
+        }
+      }
+    } catch { /* best effort */ }
+  }
   if (!user) return null;
   return {
     username: user.username,
@@ -284,9 +393,14 @@ export async function verifySendPin(username, token, pin, { recipient, fileCount
     return { ok: false, error: 'Unauthorized. Please log in to your DoquMay account.' };
   }
 
-  const key = username.trim().toLowerCase();
-  const user = accounts.get(key);
+  const key = normalizeUsername(username);
+  let user = accounts.get(key);
+  if (!user) {
+    getUser(key);
+    user = accounts.get(key);
+  }
   if (!user) return { ok: false, error: 'User account not found.' };
+
 
   // Check rate limit & lockout
   const lockout = checkPinLockout(username, ip);
@@ -384,14 +498,14 @@ export function consumeSendAuthorization(token, { username, recipient } = {}) {
   }
 
   if (username) {
-    const cleanUser = username.trim().toLowerCase();
+    const cleanUser = normalizeUsername(username);
     if (auth.username && auth.username !== cleanUser) {
       return { ok: false, error: 'Send authorization user mismatch: belongs to a different user account.' };
     }
   }
 
   if (recipient) {
-    const cleanRecipient = recipient.trim().toLowerCase().replace(/^@/, '');
+    const cleanRecipient = normalizeUsername(recipient);
     if (auth.recipient && auth.recipient !== cleanRecipient) {
       return { ok: false, error: 'Send authorization recipient mismatch: not valid for this recipient.' };
     }
@@ -412,8 +526,12 @@ export async function changePin(username, token, currentCredential, newPin, conf
     return { ok: false, error: 'Unauthorized.' };
   }
 
-  const key = username.trim().toLowerCase();
-  const user = accounts.get(key);
+  const key = normalizeUsername(username);
+  let user = accounts.get(key);
+  if (!user) {
+    getUser(key);
+    user = accounts.get(key);
+  }
   if (!user) return { ok: false, error: 'User not found.' };
 
   // Validate current credential (can be account password or current PIN)
@@ -446,8 +564,12 @@ export async function changePin(username, token, currentCredential, newPin, conf
 /** Password-authenticated PIN recovery (forgot PIN) */
 export async function recoverPinWithPassword(username, password, newPin, confirmNewPin) {
   if (!username || !password) return { ok: false, error: 'Username and password are required.' };
-  const key = username.trim().toLowerCase();
-  const user = accounts.get(key);
+  const key = normalizeUsername(username);
+  let user = accounts.get(key);
+  if (!user) {
+    getUser(key);
+    user = accounts.get(key);
+  }
   if (!user) return { ok: false, error: 'Invalid username or password.' };
 
   const testHash = crypto.scryptSync(password, user.salt, 64).toString('hex');
@@ -470,3 +592,4 @@ export async function recoverPinWithPassword(username, password, newPin, confirm
 
   return { ok: true, message: 'Your 4-digit Send PIN has been recovered and reset successfully.' };
 }
+

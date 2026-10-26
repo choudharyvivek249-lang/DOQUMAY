@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
-import { ACCEPT, formatSize, kindOf, validateFile } from '../utils/files';
+import { ACCEPT, cleanUsername, formatSize, kindOf, validateFile } from '../utils/files';
 import Avatar from './Avatar';
 import { CloseIcon, FileIcon, UploadIcon } from './Icons';
 import SendPinModal from './SendPinModal';
@@ -18,6 +18,7 @@ export default function DropBoxModal({
   onClose,
   onComplete,
 }) {
+  const cleanTarget = cleanUsername(targetUsername);
   const [targetInfo, setTargetInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [senderName, setSenderName] = useState(() => {
@@ -40,10 +41,15 @@ export default function DropBoxModal({
   // Fetch recipient's public profile info
   useEffect(() => {
     async function loadInfo() {
+      if (!cleanTarget) {
+        setError('Invalid recipient identifier.');
+        setLoading(false);
+        return;
+      }
       try {
-        const res = await fetch(`/api/user/${encodeURIComponent(targetUsername)}`);
+        const res = await fetch(`/api/user/${encodeURIComponent(cleanTarget)}`);
         const data = await res.json();
-        if (data.ok) {
+        if (data.ok && data.user) {
           setTargetInfo(data.user);
         } else {
           setError(data.error || 'Recipient not found.');
@@ -55,7 +61,8 @@ export default function DropBoxModal({
       }
     }
     loadInfo();
-  }, [targetUsername]);
+  }, [cleanTarget]);
+
 
   const addFiles = (newFiles) => {
     const list = Array.from(newFiles || []);
@@ -93,7 +100,7 @@ export default function DropBoxModal({
   // Step 6 & 7: Verify PIN on backend and obtain single-use send authorization token
   const handleVerifyPin = async (pinString) => {
     const batchId = `drop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const res = await onVerifySendPin(pinString, targetUsername, selectedFiles.length, batchId);
+    const res = await onVerifySendPin(pinString, cleanTarget, selectedFiles.length, batchId);
     if (!res.ok) {
       return res; // returns error / lockout info to SendPinModal
     }
@@ -121,7 +128,7 @@ export default function DropBoxModal({
         setProgressPercent(10);
 
         const res = await onSendDrop(
-          targetUsername,
+          cleanTarget,
           file,
           finalSenderName,
           (offset, total) => {
@@ -130,6 +137,7 @@ export default function DropBoxModal({
           },
           sendAuthToken
         );
+
 
         if (!res.ok) {
           setError(res.error || `Failed to transfer ${file.name}`);
@@ -185,7 +193,7 @@ export default function DropBoxModal({
           {loading ? (
             <div className="drop-loading">
               <div className="wa-pulse-dot" style={{ width: 14, height: 14 }} />
-              <p>Connecting to @{targetUsername}…</p>
+              <p>Connecting to @{cleanTarget || targetUsername}…</p>
             </div>
           ) : error && !targetInfo ? (
             <div className="drop-error">
@@ -199,15 +207,16 @@ export default function DropBoxModal({
             <>
               {/* Recipient Profile Header */}
               <div className="drop-target-header">
-                <Avatar name={targetInfo?.displayName || targetUsername} size={54} />
+                <Avatar name={targetInfo?.displayName || cleanTarget} size={54} />
                 <div className="drop-target-info">
-                  <h3>{targetInfo?.displayName || targetUsername}</h3>
-                  <span className="username-tag">@{targetUsername}</span>
+                  <h3>{targetInfo?.displayName || cleanTarget}</h3>
+                  <span className="username-tag">@{targetInfo?.username || cleanTarget}</span>
                   <span className={`status-badge ${targetInfo?.isOnline ? 'online' : 'dropbox'}`}>
                     {targetInfo?.isOnline ? '● Online in WhatsApp Hub' : '📦 24/7 Drop-box Active'}
                   </span>
                 </div>
               </div>
+
 
               <p className="lede text-center">
                 Select documents or photos, verify your <b>4-digit Send PIN</b>, and share via WhatsApp.
@@ -361,7 +370,7 @@ export default function DropBoxModal({
       <AnimatePresence>
         {showPinModal && (
           <SendPinModal
-            recipient={targetUsername}
+            recipient={cleanTarget}
             filesCount={selectedFiles.length}
             totalSize={totalBytes}
             onVerify={handleVerifyPin}
@@ -378,16 +387,16 @@ export default function DropBoxModal({
       <AnimatePresence>
         {showHandoffModal && (
           <WhatsAppHandoffModal
-            recipient={targetUsername}
+            recipient={cleanTarget}
             files={selectedFiles}
             fileResults={uploadedResults}
             onClose={() => {
               setShowHandoffModal(false);
-              onComplete?.(senderName.trim() || 'Sender', targetUsername);
+              onComplete?.(senderName.trim() || 'Sender', cleanTarget);
             }}
             onOpenHub={() => {
               setShowHandoffModal(false);
-              onComplete?.(senderName.trim() || 'Sender', targetUsername);
+              onComplete?.(senderName.trim() || 'Sender', cleanTarget);
             }}
           />
         )}
@@ -395,3 +404,4 @@ export default function DropBoxModal({
     </>
   );
 }
+

@@ -46,29 +46,51 @@ export function parseToken(text) {
   return m ? m[1] : null;
 }
 
+/** Cleans and canonicalizes a username from any URL, path, or handle */
+export function cleanUsername(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  let clean = raw.trim();
+  try { clean = decodeURIComponent(clean); } catch {}
+  clean = clean.replace(/^(?:\/?(?:receive|to|u)\/)?@*/i, '').replace(/\/+$/, '').trim().toLowerCase();
+  return clean;
+}
+
 /** Parses either a temporary pairing token or a permanent username scanner code/link */
 export function parseScanTarget(text) {
   const raw = String(text || '').trim();
+  if (!raw) return null;
+
+  // 1. Try URL parsing
   try {
     const u = new URL(raw);
-    const to = u.searchParams.get('to') || u.searchParams.get('u') || u.searchParams.get('user');
-    if (to) return { type: 'user', username: to.replace(/^@/, '') };
     const join = u.searchParams.get('join');
     if (join) return { type: 'token', token: join };
+
+    const to = u.searchParams.get('to') || u.searchParams.get('u') || u.searchParams.get('user') || u.searchParams.get('receive');
+    if (to) {
+      const clean = cleanUsername(to);
+      if (clean) return { type: 'user', username: clean };
+    }
+
+    // Check pathname: /receive/:user, /to/:user, /u/:user, /@:user
+    const pathMatch = u.pathname.match(/^\/(?:receive\/|to\/|u\/|@)([^/?#]+)/i);
+    if (pathMatch) {
+      const clean = cleanUsername(pathMatch[1]);
+      if (clean) return { type: 'user', username: clean };
+    }
   } catch { /* not a full url */ }
 
-  if (raw.startsWith('@')) {
-    return { type: 'user', username: raw.slice(1) };
+  // 2. Check path-like or prefixed strings
+  if (/^(?:\/?(?:receive|to|u)\/)?@?[a-zA-Z0-9_-]{3,20}$/i.test(raw)) {
+    const clean = cleanUsername(raw);
+    if (clean) return { type: 'user', username: clean };
   }
-  if (raw.startsWith('user:')) {
-    return { type: 'user', username: raw.slice(5) };
-  }
+
+  // 3. Check temporary pairing token
   const token = parseToken(raw);
   if (token) return { type: 'token', token };
 
-  if (/^[a-zA-Z0-9_-]{3,20}$/.test(raw)) {
-    return { type: 'user', username: raw };
-  }
   return null;
 }
+
 
