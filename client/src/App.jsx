@@ -6,6 +6,7 @@ import HomeScreen from './components/HomeScreen';
 import InboxModal from './components/InboxModal';
 import IncomingModal from './components/IncomingModal';
 import PermanentQRModal from './components/PermanentQRModal';
+import PinChangeModal from './components/PinChangeModal';
 import QRModal from './components/QRModal';
 import QRScanner from './components/QRScanner';
 import TransferRoom from './components/TransferRoom';
@@ -58,7 +59,8 @@ export default function App() {
     });
   };
 
-  const [overlay, setOverlay] = useState(null); // 'qr' | 'permQr' | 'scan' | 'auth' | 'inbox' | 'drop' | null
+  const [overlay, setOverlay] = useState(null); // 'qr' | 'permQr' | 'scan' | 'auth' | 'inbox' | 'drop' | 'pinChange' | null
+  const [authInitialMode, setAuthInitialMode] = useState('login');
   const [dropTarget, setDropTarget] = useState(null); // username when dropping files
   const [toast, setToast] = useState(null);
   const notify = useCallback((msg) => setToast({ id: Date.now(), msg }), []);
@@ -124,27 +126,9 @@ export default function App() {
     if (dm.room) setOverlay(null);
   }, [dm.room?.id]);
 
-  const handleStartGuest = (guestName, pin) => {
-    try {
-      sessionStorage.setItem(NAME_KEY, guestName);
-      if (pin) {
-        sessionStorage.setItem('documay:pin', pin);
-        localStorage.setItem('documay:pin', pin);
-      }
-    } catch {}
-    setName(guestName);
-    setViewMode('whatsapp');
-    try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
-    notify(`Welcome to DoquMay, ${guestName}! Device secured.`);
-  };
-
   const handleAuthSuccess = (user) => {
     try {
       localStorage.setItem(ACCOUNT_KEY, JSON.stringify(user));
-      if (user.pin) {
-        localStorage.setItem('documay:pin', user.pin);
-        sessionStorage.setItem('documay:pin', user.pin);
-      }
     } catch {}
     setAccount(user);
     setName(user.displayName || user.username);
@@ -157,7 +141,6 @@ export default function App() {
     try {
       localStorage.removeItem(ACCOUNT_KEY);
       sessionStorage.removeItem(NAME_KEY);
-      sessionStorage.removeItem('documay:pin');
     } catch {}
     setAccount(null);
     setName('');
@@ -168,7 +151,6 @@ export default function App() {
   const handleChangeName = () => {
     try {
       sessionStorage.removeItem(NAME_KEY);
-      sessionStorage.removeItem('documay:pin');
     } catch {}
     setName('');
     setOverlay(null);
@@ -211,14 +193,18 @@ export default function App() {
             key="room"
             room={dm.room}
             items={dm.items}
+            account={account}
             onBack={dm.leave}
             onSend={dm.sendFiles}
             onCancel={dm.cancel}
-            onVerifyPin={dm.verifyPin}
-            onAuthorizeHost={dm.authorizeHost}
+            onVerifySendPin={dm.verifySendPin}
             onOpenWhatsApp={() => {
               setViewMode('whatsapp');
               try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
+            }}
+            onOpenAuth={() => {
+              setAuthInitialMode('login');
+              setOverlay('auth');
             }}
           />
         ) : name && viewMode === 'whatsapp' ? (
@@ -239,14 +225,21 @@ export default function App() {
             onScan={() => setOverlay('scan')}
             onPermanentQr={() => {
               if (account) setOverlay('permQr');
-              else setOverlay('auth');
+              else {
+                setAuthInitialMode('register');
+                setOverlay('auth');
+              }
             }}
             onMyQr={() => setOverlay('qr')}
             onOpenDropModal={(target) => {
               setDropTarget(target);
               setOverlay('drop');
             }}
-            onAuth={() => setOverlay('auth')}
+            onAuth={() => {
+              setAuthInitialMode('login');
+              setOverlay('auth');
+            }}
+            onOpenPinChange={() => setOverlay('pinChange')}
             onChangeName={handleChangeName}
             onLogout={handleLogout}
             onToggleClassic={toggleViewMode}
@@ -267,15 +260,22 @@ export default function App() {
               setViewMode('whatsapp');
               try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
             }}
-            onAuth={() => setOverlay('auth')}
+            onAuth={() => {
+              setAuthInitialMode('login');
+              setOverlay('auth');
+            }}
+            onOpenPinChange={() => setOverlay('pinChange')}
             onLogout={handleLogout}
             onChangeName={handleChangeName}
           />
         ) : (
           <WelcomeScreen
             key="welcome"
-            onSubmit={handleStartGuest}
-            onOpenAuth={() => setOverlay('auth')}
+            onAccountCreated={handleAuthSuccess}
+            onOpenAuth={() => {
+              setAuthInitialMode('login');
+              setOverlay('auth');
+            }}
           />
         )}
       </AnimatePresence>
@@ -310,8 +310,19 @@ export default function App() {
         {overlay === 'auth' && (
           <AuthModal
             key="auth"
+            initialMode={authInitialMode}
             onClose={() => setOverlay(null)}
             onSuccess={handleAuthSuccess}
+          />
+        )}
+
+        {overlay === 'pinChange' && account && (
+          <PinChangeModal
+            key="pinChange"
+            account={account}
+            onClose={() => setOverlay(null)}
+            onSuccess={() => notify('Send PIN updated successfully.')}
+            notify={notify}
           />
         )}
 
@@ -329,7 +340,13 @@ export default function App() {
             key="drop"
             targetUsername={dropTarget}
             defaultSenderName={name}
+            account={account}
             onSendDrop={dm.sendDrop}
+            onVerifySendPin={dm.verifySendPin}
+            onOpenAuth={() => {
+              setAuthInitialMode('register');
+              setOverlay('auth');
+            }}
             dropItems={dm.dropItems}
             onClose={() => { setOverlay(null); setDropTarget(null); }}
             onComplete={handleDropComplete}

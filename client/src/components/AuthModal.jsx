@@ -2,61 +2,94 @@ import { motion } from 'framer-motion';
 import { useRef, useState } from 'react';
 import { CloseIcon, Logo } from './Icons';
 
-export default function AuthModal({ onClose, onSuccess }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
+export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }) {
+  const [mode, setMode] = useState(initialMode); // 'login' | 'register' | 'recover'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+  const [confirmPinDigits, setConfirmPinDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const pinRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+  const confirmPinRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+
   const cleanUser = username.trim();
   const pinStr = pinDigits.join('');
-  const isReady = cleanUser && password && pinStr.length === 4;
+  const confirmPinStr = confirmPinDigits.join('');
 
-  const handleDigitChange = (index, char) => {
-    const digit = char.replace(/\D/g, '').slice(-1);
-    const updated = [...pinDigits];
-    updated[index] = digit;
-    setPinDigits(updated);
+  const handleDigitChange = (digits, setDigits, refs, index, char) => {
+    const digit = char.replace(/\D/g, '');
 
-    if (digit && index < 3) {
-      pinRefs[index + 1].current?.focus();
+    // Full 4-digit paste
+    if (digit.length >= 4) {
+      const parts = digit.slice(0, 4).split('');
+      setDigits(parts);
+      refs[3].current?.focus();
+      return;
+    }
+
+    const single = digit.slice(-1);
+    const updated = [...digits];
+    updated[index] = single;
+    setDigits(updated);
+
+    if (single && index < 3) {
+      refs[index + 1].current?.focus();
     }
   };
 
-  const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !pinDigits[index] && index > 0) {
-      pinRefs[index - 1].current?.focus();
+  const handleKeyDown = (digits, refs, index, e) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      refs[index - 1].current?.focus();
     }
   };
 
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
-    if (!pasted) return;
-    const next = ['', '', '', ''];
-    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
-    setPinDigits(next);
-    const focusIdx = Math.min(pasted.length, 3);
-    pinRefs[focusIdx].current?.focus();
-  };
+  const isReady =
+    mode === 'login'
+      ? cleanUser && password
+      : cleanUser && password && pinStr.length === 4 && confirmPinStr.length === 4;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!cleanUser) return setError('Please enter a username.');
     if (!password) return setError('Please enter a password.');
-    if (pinStr.length !== 4) return setError('Please enter your 4-digit Security PIN.');
+
+    if (mode === 'register' || mode === 'recover') {
+      if (pinStr.length !== 4) return setError('4-digit Send PIN must contain exactly 4 numeric digits.');
+      if (confirmPinStr.length !== 4) return setError('Please confirm your 4-digit Send PIN.');
+      if (pinStr !== confirmPinStr) return setError('4-digit Send PIN and confirmation do not match.');
+    }
 
     setLoading(true);
     try {
-      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      let endpoint = '/api/auth/login';
+      let payload = { username: cleanUser, password };
+
+      if (mode === 'register') {
+        endpoint = '/api/auth/register';
+        payload = {
+          username: cleanUser,
+          password,
+          pin: pinStr,
+          confirmPin: confirmPinStr,
+          displayName: cleanUser,
+        };
+      } else if (mode === 'recover') {
+        endpoint = '/api/auth/recover-pin';
+        payload = {
+          username: cleanUser,
+          password,
+          newPin: pinStr,
+          confirmNewPin: confirmPinStr,
+        };
+      }
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: cleanUser, password, pin: pinStr }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -64,10 +97,17 @@ export default function AuthModal({ onClose, onSuccess }) {
         setLoading(false);
         return;
       }
-      try {
-        localStorage.setItem('documay:pin', pinStr);
-        sessionStorage.setItem('documay:pin', pinStr);
-      } catch {}
+
+      if (mode === 'recover') {
+        // Recovery successful: switch to login mode with notification
+        setMode('login');
+        setError('');
+        alert('✅ Send PIN recovered successfully! Please log in with your credentials.');
+        setLoading(false);
+        return;
+      }
+
+      // Plaintext PIN is NEVER stored in browser storage!
       onSuccess(data.user);
       onClose();
     } catch {
@@ -94,11 +134,19 @@ export default function AuthModal({ onClose, onSuccess }) {
 
         <div className="auth-header">
           <Logo size={42} />
-          <h2>{mode === 'register' ? 'Create Your Account' : 'Welcome Back'}</h2>
+          <h2>
+            {mode === 'register'
+              ? 'Create Your Account'
+              : mode === 'recover'
+              ? 'Reset 4-Digit Send PIN'
+              : 'Welcome Back'}
+          </h2>
           <p className="lede">
             {mode === 'register'
-              ? 'Get a permanent QR code with a 4-digit Security PIN that never expires!'
-              : 'Log in with your credentials and 4-digit PIN to open your permanent WhatsApp Hub.'}
+              ? 'Set your permanent QR username, password, and secure 4-digit Send PIN.'
+              : mode === 'recover'
+              ? 'Enter your account password to set a new 4-digit Send PIN.'
+              : 'Log in with your credentials to access your DoquMay Hub & permanent QR.'}
           </p>
         </div>
 
@@ -128,7 +176,7 @@ export default function AuthModal({ onClose, onSuccess }) {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. vivek_sharma"
+              placeholder="e.g. rahul_sharma"
               maxLength={20}
               autoComplete="username"
               autoFocus
@@ -142,42 +190,70 @@ export default function AuthModal({ onClose, onSuccess }) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="Enter your account password"
               autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               required
             />
           </label>
 
-          {/* 4-Digit Security PIN */}
-          <div className="field pin-field-block">
-            <label className="pin-field-label">
-              <span>🛡️ {mode === 'register' ? 'Set 4-Digit Security PIN' : '4-Digit Security PIN'}</span>
-              <span className="pin-field-hint">
-                {mode === 'register'
-                  ? 'Secures your standee QR code & verifies document transfers'
-                  : 'Enter your 4-digit PIN to unlock document transfers'}
-              </span>
-            </label>
-            <div className="security-pin-inputs" onPaste={handlePaste}>
-              {pinDigits.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={pinRefs[i]}
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleDigitChange(i, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(i, e)}
-                  className={`pin-digit-box ${digit ? 'filled' : ''}`}
-                  placeholder="•"
-                  aria-label={`PIN Digit ${i + 1}`}
-                  required
-                />
-              ))}
-            </div>
-          </div>
+          {/* 4-Digit Send PIN (Required for Register and Recovery) */}
+          {(mode === 'register' || mode === 'recover') && (
+            <>
+              <div className="field pin-field-block">
+                <label className="pin-field-label">
+                  <span>🛡️ {mode === 'recover' ? 'New 4-Digit Send PIN' : 'Set 4-Digit Send PIN'}</span>
+                  <span className="pin-field-hint">
+                    Required for every outgoing file send (accepts leading zeroes, e.g. 0427)
+                  </span>
+                </label>
+                <div className="security-pin-inputs">
+                  {pinDigits.map((digit, i) => (
+                    <input
+                      key={i}
+                      ref={pinRefs[i]}
+                      type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleDigitChange(pinDigits, setPinDigits, pinRefs, i, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(pinDigits, pinRefs, i, e)}
+                      className={`pin-digit-box ${digit ? 'filled' : ''}`}
+                      placeholder="•"
+                      aria-label={`PIN Digit ${i + 1}`}
+                      required
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="field pin-field-block">
+                <label className="pin-field-label">
+                  <span>🛡️ Confirm 4-Digit Send PIN</span>
+                  <span className="pin-field-hint">Confirm your 4-digit PIN</span>
+                </label>
+                <div className="security-pin-inputs">
+                  {confirmPinDigits.map((digit, i) => (
+                    <input
+                      key={i}
+                      ref={confirmPinRefs[i]}
+                      type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleDigitChange(confirmPinDigits, setConfirmPinDigits, confirmPinRefs, i, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(confirmPinDigits, confirmPinRefs, i, e)}
+                      className={`pin-digit-box ${digit ? 'filled' : ''}`}
+                      placeholder="•"
+                      aria-label={`Confirm PIN Digit ${i + 1}`}
+                      required
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           <motion.button
             type="submit"
@@ -185,16 +261,44 @@ export default function AuthModal({ onClose, onSuccess }) {
             disabled={loading || !isReady}
             whileTap={{ scale: 0.97 }}
           >
-            {loading ? 'Please wait…' : mode === 'register' ? 'Create Account & Get Permanent QR' : 'Log In & Open WhatsApp Hub'}
+            {loading
+              ? 'Please wait…'
+              : mode === 'register'
+              ? 'Create Account & Set Send PIN'
+              : mode === 'recover'
+              ? 'Reset 4-Digit Send PIN'
+              : 'Log In'}
           </motion.button>
 
-          <p className="fine text-center">
-            {mode === 'register' ? (
-              <>Already have an account? <button type="button" className="link inline" onClick={() => setMode('login')}>Log in here</button></>
+          <div className="fine text-center" style={{ marginTop: '8px' }}>
+            {mode === 'login' ? (
+              <>
+                <button
+                  type="button"
+                  className="link inline"
+                  onClick={() => { setMode('recover'); setError(''); }}
+                  style={{ display: 'block', margin: '4px auto' }}
+                >
+                  Forgot your 4-digit Send PIN? Reset here
+                </button>
+                <span>Don't have an account? </span>
+                <button type="button" className="link inline" onClick={() => { setMode('register'); setError(''); }}>
+                  Create one now
+                </button>
+              </>
+            ) : mode === 'register' ? (
+              <>
+                <span>Already have an account? </span>
+                <button type="button" className="link inline" onClick={() => { setMode('login'); setError(''); }}>
+                  Log in here
+                </button>
+              </>
             ) : (
-              <>Don't have an account? <button type="button" className="link inline" onClick={() => setMode('register')}>Create one in 10 seconds</button></>
+              <button type="button" className="link inline" onClick={() => { setMode('login'); setError(''); }}>
+                Back to Log In
+              </button>
             )}
-          </p>
+          </div>
         </form>
       </motion.section>
     </motion.div>

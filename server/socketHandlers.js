@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getUser, verifyToken } from './accounts.js';
+import { consumeSendAuthorization, getUser, verifySendPin, verifyToken } from './accounts.js';
 import {
   ALLOWED_TYPES, CHUNK_MAX_BYTES, FILE_TTL_MS, MAX_ACTIVE_PER_USER, MAX_FILE_BYTES, MAX_STORE_BYTES, QR_TTL_MS,
 } from './config.js';
@@ -127,10 +127,28 @@ export function registerHandlers(io) {
         id: socket.id,
         name: clean,
         username: verifiedUsername,
+        token: verifiedUsername ? token : null,
         roomId: me()?.roomId ?? null,
         scans: [],
       });
       reply(ack, { ok: true, me: { id: socket.id, name: clean, username: verifiedUsername } });
+    }, { needsUser: false });
+
+    /* ---------- Send PIN Verification & Authorization ---------- */
+    on('auth:verify_send_pin', async ({ username, token, pin, recipient, fileCount, batchId }, ack) => {
+      const user = me();
+      const effectiveUser = username || user?.username;
+      const effectiveToken = token || user?.token;
+
+      if (!effectiveUser || !effectiveToken) {
+        return fail(ack, 'Please log in to your DoquMay account before sending.');
+      }
+      const ip = socket.handshake.address || '';
+      const res = await verifySendPin(effectiveUser, effectiveToken, pin, { recipient, fileCount, batchId, ip });
+      if (!res.ok) {
+        return reply(ack, res);
+      }
+      reply(ack, res);
     }, { needsUser: false });
 
     /* ---------- QR identity ---------- */
@@ -272,11 +290,39 @@ export function registerHandlers(io) {
     on('room:leave', () => leaveRoom(io, me()));
 
     /* ---------- permanent drop-box transfers ---------- */
-    on('drop:offer', async ({ toUsername, name, size, senderName }, ack) => {
+    on('drop:offer', async ({ toUsername, name, size, senderName, sendAuthToken, pin }, ack) => {
       const user = me();
       if (!toUsername) return fail(ack, 'Recipient username is required.');
       const targetUser = getUser(toUsername);
       if (!targetUser) return fail(ack, 'That user account does not exist.');
+
+      // Mandatory 4-digit Send PIN verification on server
+      let authorized = false;
+      if (sendAuthToken) {
+        const authRes = consumeSendAuthorization(sendAuthToken, {
+          username: user?.username,
+          recipient: targetUser.username,
+        });
+        if (!authRes.ok) {
+          return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
+        }
+        authorized = true;
+      } else if (pin && user?.username && user?.token) {
+        const ip = socket.handshake.address || '';
+        const pinRes = await verifySendPin(user.username, user.token, pin, {
+          recipient: targetUser.username,
+          fileCount: 1,
+          ip,
+        });
+        if (!pinRes.ok) {
+          return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
+        }
+        authorized = true;
+      }
+
+      if (!authorized) {
+        return fail(ack, 'Authorization required: Please verify your 4-digit Send PIN before sending files.');
+      }
 
       const fileName = cleanFile(name);
       const ext = fileName.split('.').pop().toLowerCase();
@@ -343,13 +389,44 @@ export function registerHandlers(io) {
     });
 
     /* ---------- file transfer (1-to-1 rooms) ---------- */
-    on('file:offer', async ({ name, size }, ack) => {
+    on('file:offer', async ({ name, size, sendAuthToken, pin }, ack) => {
       const user = me();
       const room = rooms.get(user.roomId);
       if (!room) return fail(ack, 'Connect with someone first by scanning a QR code.');
-      if (room.pin && !room.verified) return fail(ack, 'Please verify the 4-digit security PIN before sharing files.');
       const receiverId = room.members.find((id) => id !== user.id);
       if (!receiverId || !users.has(receiverId)) return fail(ack, 'The other person is no longer connected.');
+      const receiverUser = users.get(receiverId);
+
+      // Verify PIN authorization
+      let authorized = false;
+      if (sendAuthToken) {
+        const authRes = consumeSendAuthorization(sendAuthToken, {
+          username: user.username,
+          recipient: receiverUser?.username || receiverUser?.name,
+        });
+        if (!authRes.ok) {
+          return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
+        }
+        authorized = true;
+      } else if (pin && user.username && user.token) {
+        const ip = socket.handshake.address || '';
+        const pinRes = await verifySendPin(user.username, user.token, pin, {
+          recipient: receiverUser?.username || receiverUser?.name,
+          fileCount: 1,
+          ip,
+        });
+        if (!pinRes.ok) {
+          return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
+        }
+        authorized = true;
+      } else if (room.verified) {
+        // Fallback for room-level PIN handshake
+        authorized = true;
+      }
+
+      if (!authorized) {
+        return fail(ack, 'Please verify the 4-digit security PIN before sharing files.');
+      }
 
       const fileName = cleanFile(name);
       const ext = fileName.split('.').pop().toLowerCase();

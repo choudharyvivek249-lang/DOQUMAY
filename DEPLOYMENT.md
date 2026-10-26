@@ -72,9 +72,24 @@ Koyeb offers a free Eco instance that runs continuously without spinning down:
 
 ---
 
+## Recommended Environment Variables
+
+In your cloud host's Environment Variables settings, you can optionally configure:
+
+| Variable | Recommended Value | Purpose |
+| :--- | :--- | :--- |
+| `NODE_ENV` | `production` | Enables production optimizations and security headers. |
+| `PIN_PEPPER` | `any-random-secret-string` | Server-side secret pepper protecting 4-digit PIN hashes. |
+| `PORT` | `3001` *(auto-set by most hosts)* | Port the Node.js server listens on. |
+| `FILE_TTL_MS` | `600000` *(10 minutes)* | Ephemeral file lifetime before automatic deletion. |
+
+---
+
 ## Testing Your Live Deployment
 
-1. Open your live URL (e.g. `https://your-app.onrender.com`) on your computer.
-2. Enter your name and click **My QR Code**.
-3. Open the same URL on your smartphone (or scan the QR code with your phone camera).
-4. Tap **Accept** and send a photo or document to verify real-time transfers over the public web!
+1. Open your live URL (e.g. `https://your-app.onrender.com` or `https://...railway.app`) on your computer or phone.
+2. Complete first-time account setup with a username, password, and your personal **4-digit Send PIN** (e.g. `0427`).
+3. Click **Standee QR** to view or share your permanent recipient QR code.
+4. From another phone or browser window, scan the QR code or visit `/?to=your_username`.
+5. Select a file, click **Send**, enter your **4-digit Send PIN** to authorize, and hand off directly to **WhatsApp**!
+

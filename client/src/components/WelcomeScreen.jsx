@@ -2,47 +2,90 @@ import { motion } from 'framer-motion';
 import { useRef, useState } from 'react';
 import { DoquMayLogo } from './Icons';
 
-export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
-  const [value, setValue] = useState('');
+export default function WelcomeScreen({ onAccountCreated, onOpenAuth }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+  const [confirmDigits, setConfirmDigits] = useState(['', '', '', '']);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const pinRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+  const confirmRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
-  const clean = value.trim();
+  const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
   const pinStr = pinDigits.join('');
-  const isReady = clean.length > 0 && pinStr.length === 4;
+  const confirmPinStr = confirmDigits.join('');
 
-  const handleDigitChange = (index, char) => {
-    const digit = char.replace(/\D/g, '').slice(-1);
-    const updated = [...pinDigits];
-    updated[index] = digit;
-    setPinDigits(updated);
+  const isReady =
+    cleanUser.length >= 3 &&
+    password.length >= 4 &&
+    pinStr.length === 4 &&
+    confirmPinStr.length === 4;
 
-    if (digit && index < 3) {
-      pinRefs[index + 1].current?.focus();
+  const handleDigitChange = (digits, setDigits, refs, index, char) => {
+    setError('');
+    const clean = char.replace(/\D/g, '');
+
+    if (clean.length >= 4) {
+      const parts = clean.slice(0, 4).split('');
+      setDigits(parts);
+      refs[3].current?.focus();
+      return;
+    }
+
+    const single = clean.slice(-1);
+    const updated = [...digits];
+    updated[index] = single;
+    setDigits(updated);
+
+    if (single && index < 3) {
+      refs[index + 1].current?.focus();
     }
   };
 
-  const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !pinDigits[index] && index > 0) {
-      pinRefs[index - 1].current?.focus();
+  const handleKeyDown = (digits, refs, index, e) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      refs[index - 1].current?.focus();
     }
   };
 
-  const handlePaste = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
-    if (!pasted) return;
-    const next = ['', '', '', ''];
-    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
-    setPinDigits(next);
-    const focusIdx = Math.min(pasted.length, 3);
-    pinRefs[focusIdx].current?.focus();
-  };
+    setError('');
 
-  const submit = (e) => {
-    e.preventDefault();
-    if (isReady) {
-      onSubmit(clean, pinStr);
+    if (cleanUser.length < 3) return setError('Username must be at least 3 characters.');
+    if (password.length < 4) return setError('Password must be at least 4 characters.');
+    if (pinStr.length !== 4) return setError('Send PIN must contain exactly 4 numeric digits.');
+    if (confirmPinStr.length !== 4) return setError('Please confirm your 4-digit Send PIN.');
+    if (pinStr !== confirmPinStr) return setError('4-digit Send PIN and confirmation do not match.');
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: cleanUser,
+          password,
+          pin: pinStr,
+          confirmPin: confirmPinStr,
+          displayName: username.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || 'Failed to create account. Please try another username.');
+        setLoading(false);
+        return;
+      }
+
+      // Successful first-time setup!
+      onAccountCreated(data.user);
+    } catch {
+      setError('Cannot reach server. Please check your internet connection.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,31 +116,45 @@ export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
         </div>
 
         <p className="lede">
-          Send photos and documents instantly with a QR scan. Ephemeral, 100% secure, zero login.
+          Send photos and documents instantly with a QR scan &amp; WhatsApp handoff.
           <br />
           <span className="welcome-not-money">📄 For Documents &amp; Files · Not For Money</span>
         </p>
 
+        {error && <div className="auth-error" role="alert">{error}</div>}
+
         <label className="field">
-          <span>Quick Guest Display Name</span>
+          <span>Choose Your Username / ID</span>
           <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            maxLength={24}
-            placeholder="e.g. Rahul Sharma"
-            autoComplete="nickname"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            maxLength={20}
+            placeholder="e.g. rahul_sharma"
+            autoComplete="username"
             autoFocus
             required
           />
         </label>
 
-        {/* 4-Digit Device Security PIN */}
+        <label className="field">
+          <span>Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="At least 4 characters"
+            autoComplete="new-password"
+            required
+          />
+        </label>
+
+        {/* 4-Digit Personal Send PIN */}
         <div className="field pin-field-block">
           <label className="pin-field-label">
-            <span>🛡️ 4-Digit Device Security PIN</span>
-            <span className="pin-field-hint">Secures your device &amp; verifies document sharing</span>
+            <span>🛡️ Personal 4-Digit Send PIN</span>
+            <span className="pin-field-hint">Required whenever you send files (accepts leading zeroes, e.g. 0427)</span>
           </label>
-          <div className="security-pin-inputs" onPaste={handlePaste}>
+          <div className="security-pin-inputs">
             {pinDigits.map((digit, i) => (
               <input
                 key={i}
@@ -107,19 +164,51 @@ export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
                 pattern="[0-9]*"
                 maxLength={1}
                 value={digit}
-                onChange={(e) => handleDigitChange(i, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(i, e)}
+                onChange={(e) => handleDigitChange(pinDigits, setPinDigits, pinRefs, i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(pinDigits, pinRefs, i, e)}
                 className={`pin-digit-box ${digit ? 'filled' : ''}`}
                 placeholder="•"
-                aria-label={`PIN Digit ${i + 1}`}
+                aria-label={`Send PIN Digit ${i + 1}`}
                 required
               />
             ))}
           </div>
         </div>
 
-        <motion.button className="btn btn-primary" disabled={!isReady} whileTap={{ scale: 0.97 }}>
-          ⚡ Start Sending with DoquMay
+        {/* Confirm 4-Digit Send PIN */}
+        <div className="field pin-field-block">
+          <label className="pin-field-label">
+            <span>🛡️ Confirm 4-Digit Send PIN</span>
+            <span className="pin-field-hint">Re-enter your 4-digit PIN</span>
+          </label>
+          <div className="security-pin-inputs">
+            {confirmDigits.map((digit, i) => (
+              <input
+                key={i}
+                ref={confirmRefs[i]}
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleDigitChange(confirmDigits, setConfirmDigits, confirmRefs, i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(confirmDigits, confirmRefs, i, e)}
+                className={`pin-digit-box ${digit ? 'filled' : ''}`}
+                placeholder="•"
+                aria-label={`Confirm PIN Digit ${i + 1}`}
+                required
+              />
+            ))}
+          </div>
+        </div>
+
+        <motion.button
+          type="submit"
+          className="btn btn-primary"
+          disabled={!isReady || loading}
+          whileTap={{ scale: 0.97 }}
+        >
+          {loading ? 'Setting Up Account…' : '⚡ Start Sending with DoquMay'}
         </motion.button>
 
         <div className="welcome-divider">
@@ -134,8 +223,8 @@ export default function WelcomeScreen({ onSubmit, onOpenAuth }) {
         >
           <span>✨</span>
           <div className="btn-col">
-            <b>Log In / Create Free Account</b>
-            <span className="sub">Get a Permanent QR Standee with 4-Digit Security PIN</span>
+            <b>Already Have an Account? Log In</b>
+            <span className="sub">Preserves your existing 4-digit PIN &amp; Permanent QR</span>
           </div>
         </motion.button>
 

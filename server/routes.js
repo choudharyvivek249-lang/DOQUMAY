@@ -1,7 +1,15 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { Router } from 'express';
-import { getUser, loginUser, registerUser, verifyToken } from './accounts.js';
+import {
+  changePin,
+  getUser,
+  loginUser,
+  recoverPinWithPassword,
+  registerUser,
+  verifySendPin,
+  verifyToken,
+} from './accounts.js';
 import { IMAGE_EXT } from './config.js';
 import { onlineAccounts, transfers } from './state.js';
 import { filePath } from './storage.js';
@@ -10,25 +18,60 @@ const router = Router();
 
 router.get('/health', (_req, res) => res.json({ ok: true }));
 
-// Auth: Register with unique username, password, and 4-digit security PIN
+// Auth: Register with unique username, password, and 4-digit personal Send PIN
 router.post('/auth/register', async (req, res) => {
-  const { username, password, pin } = req.body || {};
+  const { username, password, pin, confirmPin, displayName } = req.body || {};
   if (!pin || !/^\d{4}$/.test(String(pin).trim())) {
-    return res.status(400).json({ ok: false, error: 'Please enter a 4-digit Security PIN to protect your permanent QR standee.' });
+    return res.status(400).json({ ok: false, error: 'Please enter a 4-digit numeric Send PIN.' });
   }
-  const result = await registerUser(username, password, pin);
+  const result = await registerUser(username, password, pin, confirmPin, displayName);
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
 });
 
-// Auth: Log in with username, password, and 4-digit security PIN
+// Auth: Log in with username and password (preserves existing 4-digit PIN)
 router.post('/auth/login', async (req, res) => {
-  const { username, password, pin } = req.body || {};
-  if (!pin || !/^\d{4}$/.test(String(pin).trim())) {
-    return res.status(401).json({ ok: false, error: 'Please enter your 4-digit Security PIN to unlock your account.' });
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ ok: false, error: 'Please enter your username and password.' });
   }
-  const result = await loginUser(username, password, pin);
+  const result = await loginUser(username, password);
   if (!result.ok) return res.status(401).json(result);
+  res.json(result);
+});
+
+// Auth: Verify 4-digit Send PIN before sending file(s)
+// Returns short-lived single-use sendAuthToken
+router.post('/auth/verify-send-pin', async (req, res) => {
+  const username = String(req.headers['x-auth-user'] || req.body?.username || '');
+  const token = String(req.headers['x-auth-token'] || req.body?.token || '');
+  const { pin, recipient, fileCount, batchId } = req.body || {};
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '');
+
+  const result = await verifySendPin(username, token, pin, { recipient, fileCount, batchId, ip });
+  if (!result.ok) {
+    const statusCode = result.locked ? 429 : 401;
+    return res.status(statusCode).json(result);
+  }
+  res.json(result);
+});
+
+// Auth: Change 4-digit Send PIN
+router.post('/auth/change-pin', async (req, res) => {
+  const username = String(req.headers['x-auth-user'] || req.body?.username || '');
+  const token = String(req.headers['x-auth-token'] || req.body?.token || '');
+  const { currentCredential, newPin, confirmNewPin } = req.body || {};
+
+  const result = await changePin(username, token, currentCredential, newPin, confirmNewPin);
+  if (!result.ok) return res.status(400).json(result);
+  res.json(result);
+});
+
+// Auth: Recover 4-digit Send PIN using account password
+router.post('/auth/recover-pin', async (req, res) => {
+  const { username, password, newPin, confirmNewPin } = req.body || {};
+  const result = await recoverPinWithPassword(username, password, newPin, confirmNewPin);
+  if (!result.ok) return res.status(400).json(result);
   res.json(result);
 });
 

@@ -200,11 +200,35 @@ export function useDocumay(name, notify, account) {
     }
   }, [call]);
 
-  const sendFiles = useCallback(async (list) => {
+  const verifySendPin = useCallback(async (pin, recipient, fileCount = 1, batchId = '') => {
+    const username = accountRef.current?.username;
+    const token = accountRef.current?.token;
+    if (!username || !token) {
+      return { ok: false, error: 'Please log in or set up your DoquMay account before sending.' };
+    }
+
+    try {
+      const res = await fetch(`${SERVER}/api/auth/verify-send-pin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-user': username,
+          'x-auth-token': token,
+        },
+        body: JSON.stringify({ pin, recipient, fileCount, batchId }),
+      });
+      const data = await res.json();
+      return data;
+    } catch {
+      return { ok: false, error: 'Cannot reach server to verify PIN. Check your connection.' };
+    }
+  }, []);
+
+  const sendFiles = useCallback(async (list, sendAuthToken) => {
     for (const file of Array.from(list)) {
       const problem = validateFile(file);
       if (problem) { notifyRef.current(`${file.name}: ${problem}`); continue; }
-      const res = await call('file:offer', { name: file.name, size: file.size });
+      const res = await call('file:offer', { name: file.name, size: file.size, sendAuthToken });
       if (!res.ok) { notifyRef.current(res.error); continue; }
       files.current.set(res.id, file);
       setItems((l) => [...l, {
@@ -214,10 +238,10 @@ export function useDocumay(name, notify, account) {
     }
   }, [call]);
 
-  const sendDrop = useCallback(async (toUsername, file, senderName, onProgress) => {
+  const sendDrop = useCallback(async (toUsername, file, senderName, onProgress, sendAuthToken) => {
     const problem = validateFile(file);
     if (problem) { notifyRef.current(`${file.name}: ${problem}`); return { ok: false, error: problem }; }
-    const res = await call('drop:offer', { toUsername, name: file.name, size: file.size, senderName });
+    const res = await call('drop:offer', { toUsername, name: file.name, size: file.size, senderName, sendAuthToken });
     if (!res.ok) { notifyRef.current(res.error); return res; }
     files.current.set(res.id, file);
     setDropItems((l) => [...l, {
@@ -272,6 +296,6 @@ export function useDocumay(name, notify, account) {
   return {
     connected, room, items, dropItems, drops, qr,
     createQr, scan, sendFiles, sendDrop, dismissDrop, fetchDrops, respond, cancel, leave,
-    verifyPin, authorizeHost,
+    verifyPin, authorizeHost, verifySendPin,
   };
 }

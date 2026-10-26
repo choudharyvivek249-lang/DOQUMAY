@@ -39,7 +39,7 @@ test('accounts: registration, unique usernames, and login', async () => {
   // 8. 4-digit PIN registration and verification
   const regPin = await registerUser('pin_user_test', 'secret123', '4321');
   assert.equal(regPin.ok, true);
-  assert.equal(regPin.user.pin, '4321');
+  assert.equal(regPin.user.pin, undefined); // Never return plaintext PIN!
 
   const loginPinWrong = await loginUser('pin_user_test', 'secret123', '9999');
   assert.equal(loginPinWrong.ok, false);
@@ -47,7 +47,7 @@ test('accounts: registration, unique usernames, and login', async () => {
 
   const loginPinCorrect = await loginUser('pin_user_test', 'secret123', '4321');
   assert.equal(loginPinCorrect.ok, true);
-  assert.equal(loginPinCorrect.user.pin, '4321');
+  assert.equal(loginPinCorrect.user.pin, undefined); // Never return plaintext PIN!
 
   // 9. Public user lookup
   const pub = getUser('alice_test');

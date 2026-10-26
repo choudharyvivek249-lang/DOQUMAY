@@ -69,15 +69,34 @@ function FileMessageBubble({ drop, onDismiss, onPreviewImage }) {
 
         <div className="wa-bubble-actions">
           {downloadUrl ? (
-            <a
-              href={downloadUrl}
-              className="wa-btn-download"
-              target="_blank"
-              rel="noopener noreferrer"
-              download={drop.name}
-            >
-              <DownloadIcon width={15} height={15} /> Download
-            </a>
+            <>
+              <a
+                href={downloadUrl}
+                className="wa-btn-download"
+                target="_blank"
+                rel="noopener noreferrer"
+                download={drop.name}
+              >
+                <DownloadIcon width={15} height={15} /> Download
+              </a>
+              <button
+                type="button"
+                className="wa-btn-download"
+                style={{ background: '#25d366', color: '#ffffff', border: 'none' }}
+                onClick={() => {
+                  const fullUrl = `${window.location.origin}${downloadUrl}`;
+                  const text = `📄 Sent via DoquMay: ${drop.name} (${formatSize(drop.size)})\n🔒 Temporary secure download (expires in 10 minutes):\n${fullUrl}\n⚡ Ephemeral & Secure Document Transfer`;
+                  if (navigator.share) {
+                    navigator.share({ title: drop.name, text }).catch(() => {});
+                  } else {
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                title="Share link to WhatsApp"
+              >
+                💬 WhatsApp
+              </button>
+            </>
           ) : (
             <span className="wa-status-pill sent">✓ Delivered</span>
           )}
@@ -127,6 +146,7 @@ export default function WhatsAppHub({
   onMyQr,
   onOpenDropModal,
   onAuth,
+  onOpenPinChange,
   onChangeName,
   onLogout,
   onToggleClassic,
@@ -471,6 +491,18 @@ export default function WhatsAppHub({
                 {/* Actions: View toggle & Logout/Exit */}
                 <div className="wa-profile-section">
                   <div className="wa-profile-bottom-actions">
+                    {account && onOpenPinChange && (
+                      <button
+                        type="button"
+                        className="wa-profile-link-btn"
+                        onClick={() => {
+                          setShowProfile(false);
+                          onOpenPinChange();
+                        }}
+                      >
+                        🛡️ Change 4-Digit Send PIN
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="wa-profile-link-btn"
