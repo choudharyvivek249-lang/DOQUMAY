@@ -1,32 +1,44 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRef, useState } from 'react';
-import { getHeroForSeed, getRandomHero } from '../utils/heroCards';
-import ArtisticAnimeQR from './ArtisticAnimeQR';
-import { CloseIcon, DOQUMAY_QR_LOGO_DATA_URI, DoquMayLogo } from './Icons';
+import { CloseIcon, CopyIcon, DOQUMAY_QR_LOGO_DATA_URI, DoquMayLogo, QrIcon, ShareIcon } from './Icons';
 
 export default function PermanentQRModal({ account, onClose }) {
   const [downloading, setDownloading] = useState(false);
-  const [qrMode, setQrMode] = useState('artistic'); // 'artistic' | 'classic'
+  const [copied, setCopied] = useState(false);
   const qrRef = useRef(null);
 
   const username = account?.username || '';
   const permanentUrl = `${window.location.origin}/?to=${encodeURIComponent(username)}`;
 
-  // Surprise anime collectible card seeded by username
-  const [hero, setHero] = useState(() => getHeroForSeed(username));
-  const [cardRevealed, setCardRevealed] = useState(true);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(permanentUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
 
-  const handleRerollHero = () => {
-    setCardRevealed(false);
-    setTimeout(() => {
-      setHero((prev) => getRandomHero(prev.id));
-      setCardRevealed(true);
-    }, 150);
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Drop files to @${username} on DoquMay`,
+          text: `Scan my DoquMay QR code or open this link to send me documents & photos instantly:`,
+          url: permanentUrl,
+        });
+      } catch {
+        /* cancelled */
+      }
+    } else {
+      copy();
+    }
   };
 
   /**
-   * Generates a high-res printable merchant-style anime standee poster
+   * Generates a clean, high-resolution merchant-ready document standee poster
    * and triggers the browser print dialog plus a backup image download
    */
   const handlePrintStandee = async () => {
@@ -39,94 +51,89 @@ export default function PermanentQRModal({ account, onClose }) {
       canvas.height = 1600;
       const ctx = canvas.getContext('2d');
 
-      // 1. Soft clean background
-      ctx.fillStyle = '#FAF9F6';
+      // 1. Clean crisp background
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Top Soft Header Gradient
-      const grad = ctx.createLinearGradient(0, 0, 1200, 260);
-      grad.addColorStop(0, '#EDE9FE');
-      grad.addColorStop(0.5, '#F5F3FF');
-      grad.addColorStop(1, '#E0F2FE');
+      const grad = ctx.createLinearGradient(0, 0, 1200, 240);
+      grad.addColorStop(0, '#F5F3FF');
+      grad.addColorStop(0.5, '#FAF5FF');
+      grad.addColorStop(1, '#F0F9FF');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 1200, 240);
 
-      // Top Tagline Bar
+      // Top Tagline Pill
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.roundRect(150, 24, 900, 48, 24);
+      ctx.roundRect(150, 24, 900, 44, 22);
       ctx.fill();
-      ctx.fillStyle = '#6D28D9';
-      ctx.font = 'bold 20px Manrope, sans-serif';
+      ctx.fillStyle = '#7C3AED';
+      ctx.font = 'bold 18px Manrope, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('⚡ WORLD’S 1ST FASTEST & EASIEST DOCUMENT SENDER ⚡', 600, 56);
+      ctx.fillText('⚡ WORLD’S 1ST FASTEST & EASIEST DOCUMENT SENDER ⚡', 600, 52);
 
       // Brand Title
-      ctx.fillStyle = '#1E293B';
-      ctx.font = '800 62px Manrope, sans-serif';
-      ctx.fillText('DoquMay', 600, 140);
+      ctx.fillStyle = '#0F172A';
+      ctx.font = '800 58px Manrope, sans-serif';
+      ctx.fillText('DoquMay', 600, 135);
 
       ctx.fillStyle = '#64748B';
       ctx.font = '600 22px Manrope, sans-serif';
-      ctx.fillText('Instant Document Transfer · For Documents, Not Money', 600, 185);
+      ctx.fillText('Instant Document Transfer · For Documents, Not Money', 600, 180);
 
-      // Hero Card Header (Soft Tinted)
-      ctx.fillStyle = hero.theme.cardBg || '#F8FAFC';
+      // Handle Card
+      ctx.fillStyle = '#F8FAFC';
       ctx.beginPath();
-      ctx.roundRect(100, 280, 1000, 160, 28);
+      ctx.roundRect(140, 270, 920, 110, 24);
       ctx.fill();
-      ctx.strokeStyle = hero.theme.cardBorder || '#E2E8F0';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.fillStyle = hero.theme.primary;
-      ctx.font = 'bold 22px Manrope, sans-serif';
-      ctx.fillText(`${hero.rarity} · ${hero.universe.toUpperCase()}`, 600, 325);
-
-      ctx.fillStyle = '#1E293B';
+      ctx.fillStyle = '#0F172A';
       ctx.font = '800 36px Manrope, sans-serif';
-      ctx.fillText(`${hero.name} – ${hero.cardTitle}`, 600, 375);
+      ctx.fillText(`Drop Documents to @${username}`, 600, 325);
 
-      ctx.fillStyle = '#475569';
-      ctx.font = 'italic 20px Manrope, sans-serif';
-      ctx.fillText(hero.quote, 600, 415);
+      ctx.fillStyle = '#10B981';
+      ctx.font = 'bold 20px Manrope, sans-serif';
+      ctx.fillText('✓ Permanent Standee · Never Expires', 600, 360);
 
       // QR Code Container Background
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.roundRect(260, 480, 680, 680, 36);
+      ctx.roundRect(240, 420, 720, 720, 36);
       ctx.fill();
-      ctx.strokeStyle = hero.theme.qrBorder || '#E2E8F0';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 3;
       ctx.stroke();
 
-      // Check for rendered canvas from ArtisticAnimeQR or SVG fallback
-      const artCanvas = qrRef.current?.querySelector('canvas');
+      // Draw QR code from SVG
       const artSvg = qrRef.current?.querySelector('svg.main-qr-svg');
 
       const finishPrint = (qrImg) => {
         if (qrImg) {
-          ctx.drawImage(qrImg, 290, 510, 620, 620);
+          ctx.drawImage(qrImg, 270, 450, 660, 660);
         }
 
-        // Account Handle Pill
-        ctx.fillStyle = hero.theme.primary;
-        ctx.beginPath();
-        ctx.roundRect(220, 1220, 760, 84, 42);
-        ctx.fill();
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 34px Manrope, sans-serif';
-        ctx.fillText(`Drop Documents to @${username}`, 600, 1274);
-
-        // Instructions
-        ctx.fillStyle = '#334155';
-        ctx.font = '600 24px Manrope, sans-serif';
-        ctx.fillText('Scan with Google Lens, Phone Camera, or DoquMay', 600, 1370);
+        // Instructions Section
+        ctx.fillStyle = '#1E293B';
+        ctx.font = 'bold 26px Manrope, sans-serif';
+        ctx.fillText('Scan with Phone Camera, Google Lens, or DoquMay', 600, 1220);
 
         ctx.fillStyle = '#64748B';
-        ctx.font = '500 18px Manrope, sans-serif';
-        ctx.fillText('🔒 Instant Zero-Login Transfer · Files auto-delete in 10 minutes · Powered by DoquMay', 600, 1420);
+        ctx.font = '500 20px Manrope, sans-serif';
+        ctx.fillText('1. Scan QR  ·  2. Pick Files  ·  3. Enter 4-digit PIN & Send', 600, 1265);
+
+        // Security footer
+        ctx.fillStyle = '#F1F5F9';
+        ctx.beginPath();
+        ctx.roundRect(140, 1320, 920, 80, 20);
+        ctx.fill();
+
+        ctx.fillStyle = '#475569';
+        ctx.font = '600 18px Manrope, sans-serif';
+        ctx.fillText('🔒 Instant Zero-Login Transfer · Files auto-delete in 10 minutes · Powered by DoquMay', 600, 1368);
 
         const standeeDataUrl = canvas.toDataURL('image/png');
 
@@ -170,16 +177,14 @@ export default function PermanentQRModal({ account, onClose }) {
 
         // Backup download
         const a = document.createElement('a');
-        a.download = `DoquMay-Standee-${username}-${hero.name.replace(/\s+/g, '_')}.png`;
+        a.download = `DoquMay-Standee-${username}.png`;
         a.href = standeeDataUrl;
         a.click();
 
         setDownloading(false);
       };
 
-      if (artCanvas) {
-        finishPrint(artCanvas);
-      } else if (artSvg) {
+      if (artSvg) {
         const svgData = new XMLSerializer().serializeToString(artSvg);
         const img = new Image();
         img.onload = () => finishPrint(img);
@@ -203,7 +208,7 @@ export default function PermanentQRModal({ account, onClose }) {
       onClick={onClose}
     >
       <motion.section
-        className="sheet hero-qr-sheet permanent-sheet soft-theme"
+        className="sheet permanent-sheet simple-qr-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="DoquMay Permanent QR Standee"
@@ -217,14 +222,7 @@ export default function PermanentQRModal({ account, onClose }) {
           <CloseIcon />
         </button>
 
-        {/* Global DoquMay Tagline Banner (Soft Shades) */}
-        <div className="doqumay-tagline-badge soft">
-          <span className="sparkle-icon">⚡</span>
-          <span className="tagline-text">WORLD’S 1ST FASTEST &amp; EASIEST DOCUMENT SENDER</span>
-          <span className="sparkle-icon">⚡</span>
-        </div>
-
-        {/* Pay-App Standee Header (Soft Shades) */}
+        {/* Brand Standee Header */}
         <div className="standee-header soft">
           <DoquMayLogo size={42} showTagline={false} />
           <div className="standee-title-wrap">
@@ -239,134 +237,73 @@ export default function PermanentQRModal({ account, onClose }) {
           </div>
         </div>
 
-        {/* Anime Art Collectible QR Card (Soft Pastel Backgrounds) */}
-        <AnimatePresence mode="wait">
-          {cardRevealed && (
-            <motion.div
-              key={hero.id}
-              className="surprise-hero-card permanent-hero-card soft"
-              style={{
-                background: hero.theme.cardBg,
-                borderColor: hero.theme.cardBorder,
-                boxShadow: `0 8px 30px ${hero.theme.glow}`,
+        {/* Clean Subtitle & Handle */}
+        <div className="simple-qr-info">
+          <h3>Drop Documents to <b>@{username}</b></h3>
+          <p className="simple-qr-lede">
+            This QR code <b>never expires</b>. Anyone can scan it with any phone camera or Google Lens to send you documents directly.
+          </p>
+        </div>
+
+        {/* Clean, High-Contrast Scannable QR Code */}
+        <div className="qr-box permanent simple-qr-box" ref={qrRef}>
+          <div className="qr-inner-wrapper">
+            <QRCodeSVG
+              value={permanentUrl}
+              size={230}
+              level="H"
+              bgColor="#ffffff"
+              fgColor="#0f172a"
+              marginSize={2}
+              className="main-qr-svg"
+              imageSettings={{
+                src: DOQUMAY_QR_LOGO_DATA_URI,
+                height: 44,
+                width: 44,
+                excavate: true,
               }}
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ type: 'spring', damping: 24, stiffness: 280 }}
-            >
-              {/* Standee Top Card: Character portrait & Details */}
-              <div className="hero-card-header soft" style={{ borderBottomColor: hero.theme.cardBorder }}>
-                <div className="hero-avatar-wrap">
-                  {hero.image ? (
-                    <img src={hero.image} alt={hero.name} className="hero-portrait-img" />
-                  ) : (
-                    <div className="hero-avatar-badge soft" style={{ background: hero.theme.tagBg }}>
-                      <span className="hero-emoji">{hero.avatar}</span>
-                    </div>
-                  )}
-                </div>
+            />
+          </div>
+        </div>
 
-                <div className="hero-meta">
-                  <div className="hero-rarity-row">
-                    <span
-                      className="hero-rarity-badge soft"
-                      style={{ color: hero.theme.primary, borderColor: hero.theme.cardBorder, background: hero.theme.tagBg }}
-                    >
-                      {hero.rarity}
-                    </span>
-                    <span className="hero-universe-tag">{hero.universe}</span>
-                  </div>
-                  <b className="hero-name soft">{hero.name}</b>
-                  <span className="hero-card-title soft">{hero.cardTitle}</span>
-                </div>
+        {/* Recipient Handle Pill */}
+        <div className="perm-url-pill" onClick={copy} title="Click to copy link">
+          <code>{window.location.host}/?to=@{username}</code>
+          <button type="button" className="icon-btn-sm" aria-label="Copy link">
+            <CopyIcon width={16} height={16} />
+          </button>
+        </div>
 
-                <button
-                  type="button"
-                  className="hero-reroll-btn soft"
-                  onClick={handleRerollHero}
-                  title="Draw another anime character card!"
-                >
-                  🎲 <span className="reroll-label">Change Anime Art</span>
-                </button>
-              </div>
+        {/* Clean Action Buttons */}
+        <div className="btn-group" style={{ marginTop: '0.85rem' }}>
+          <motion.button
+            className="btn btn-primary btn-print-standee"
+            onClick={handlePrintStandee}
+            disabled={downloading}
+            whileTap={{ scale: 0.98 }}
+          >
+            🖨️ {downloading ? 'Preparing Standee Print…' : 'Print QR Standee'}
+          </motion.button>
 
-              {/* Character Quote */}
-              <p className="hero-quote soft" style={{ borderLeftColor: hero.theme.primary, background: '#FFFFFF' }}>
-                {hero.quote}
-              </p>
+          <motion.button
+            className="btn btn-pill"
+            onClick={copy}
+            whileTap={{ scale: 0.98 }}
+          >
+            <CopyIcon width={18} height={18} /> {copied ? 'Link Copied!' : 'Copy Link'}
+          </motion.button>
+        </div>
 
-              {/* Mode Toggle: Artistic Anime QR vs Classic Crisp QR */}
-              <div className="qr-mode-toggle">
-                <button
-                  type="button"
-                  className={`qr-mode-tab ${qrMode === 'artistic' ? 'active' : ''}`}
-                  onClick={() => setQrMode('artistic')}
-                >
-                  🎨 Anime Art QR
-                </button>
-                <button
-                  type="button"
-                  className={`qr-mode-tab ${qrMode === 'classic' ? 'active' : ''}`}
-                  onClick={() => setQrMode('classic')}
-                >
-                  ⚡ Classic Mode
-                </button>
-              </div>
+        {navigator.share && (
+          <button className="link" onClick={handleShare} style={{ marginTop: '0.65rem' }}>
+            <ShareIcon width={16} height={16} /> Share Link with Sender
+          </button>
+        )}
 
-              {/* QR Container: Features the Artistic Anime QR (ControlNet Style) or Classic */}
-              <div
-                className="qr-box hero-qr-box permanent soft"
-                ref={qrRef}
-                style={{ borderColor: hero.theme.qrBorder }}
-              >
-                {qrMode === 'artistic' ? (
-                  <ArtisticAnimeQR
-                    value={permanentUrl}
-                    hero={hero}
-                    size={248}
-                  />
-                ) : (
-                  <div className="qr-inner-wrapper">
-                    <QRCodeSVG
-                      value={permanentUrl}
-                      size={220}
-                      level="H"
-                      bgColor="#ffffff"
-                      fgColor="#0f172a"
-                      marginSize={2}
-                      className="main-qr-svg"
-                      imageSettings={{
-                        src: DOQUMAY_QR_LOGO_DATA_URI,
-                        height: 42,
-                        width: 42,
-                        excavate: true,
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Recipient Handle Pill (Soft Style) */}
-              <div className="standee-handle-badge soft">
-                <span className="pulse-indicator" />
-                <span>Drop Documents to <b>@{username}</b> (Never Expires)</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ONE SINGLE CLEAN PRINT BUTTON AT BOTTOM */}
-        <motion.button
-          className="btn btn-primary soft btn-print-standee"
-          onClick={handlePrintStandee}
-          disabled={downloading}
-          whileTap={{ scale: 0.98 }}
-        >
-          🖨️ {downloading ? 'Preparing Standee Print…' : 'Print QR Standee'}
-        </motion.button>
+        <p className="fine text-center" style={{ marginTop: '0.6rem' }}>
+          🔒 Protected by 4-digit Send PIN verification · Auto-deletes in 10 minutes
+        </p>
       </motion.section>
     </motion.div>
   );
 }
-

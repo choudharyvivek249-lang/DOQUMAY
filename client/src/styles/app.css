@@ -2894,5 +2894,51 @@ h1, h2, p { margin: 0; }
   text-align: left;
 }
 
+/* ================= SIMPLE CLEAN QR MODAL ================= */
+.simple-qr-sheet {
+  max-width: 440px;
+  padding: 24px 20px max(24px, env(safe-area-inset-bottom));
+  gap: 12px;
+}
+
+.simple-qr-info {
+  text-align: center;
+  margin-top: 2px;
+}
+
+.simple-qr-info h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.simple-qr-lede {
+  font-size: 0.88rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.simple-qr-box {
+  padding: 16px;
+  background: #ffffff;
+  border-radius: 22px;
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  margin: 6px auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.simple-qr-box svg.main-qr-svg {
+  display: block;
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+}
+
+
 
 
