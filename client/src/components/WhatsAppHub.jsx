@@ -16,7 +16,9 @@ import {
   ScanIcon,
   SearchIcon,
   TrashIcon,
+  UploadIcon,
 } from './Icons';
+
 import SecurityPinHandshake from './SecurityPinHandshake';
 
 /**
@@ -835,61 +837,92 @@ export default function WhatsAppHub({
             </div>
 
             {/* WhatsApp Chat Bottom Toolbar */}
-            <footer className="wa-chat-footer">
-              <div className="wa-footer-left">
-                <span className="wa-footer-info">
-                  Sharing documents with <b>{activeGroup.name}</b> {activeGroup.isLiveRoom && (room?.peerOnline ? '● Live' : '○ Offline')}
-                </span>
+            <footer className="wa-chat-footer" role="region" aria-label="Transfer Room Actions">
+              {/* Compact Informational Status Row */}
+              <div className="wa-footer-status-row">
+                <div className="wa-footer-status-pill">
+                  <span
+                    className={`wa-footer-status-dot ${
+                      activeGroup.isLiveRoom ? (room?.peerOnline ? 'live' : 'offline') : 'active'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="wa-footer-status-text">
+                    Sharing documents with <b className="wa-footer-recipient">{activeGroup.name}</b>
+                  </span>
+                  {activeGroup.isLiveRoom && (
+                    <span className={`wa-footer-live-badge ${room?.peerOnline ? 'live' : 'offline'}`}>
+                      {room?.peerOnline ? '● Live' : '○ Offline'}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="wa-footer-actions">
-                <button
-                  type="button"
-                  className="wa-footer-btn"
-                  onClick={() => handleDownloadAll(activeGroup)}
-                >
-                  <DownloadIcon width={16} height={16} /> Save All
-                </button>
 
-                {/* Send files button: direct live streaming if live room, or drop modal if offline */}
+              {/* Action Buttons Toolbar / Grid */}
+              <div className="wa-footer-actions">
+                {/* 1. Send Files Back (Primary Action on mobile) */}
                 {activeGroup.isLiveRoom ? (
                   <>
                     <input ref={roomFileInputRef} type="file" accept={ACCEPT} multiple hidden onChange={handlePickRoomFiles} />
                     <button
                       type="button"
-                      className="wa-footer-btn reply-btn"
+                      className="wa-footer-btn wa-btn-reply"
                       onClick={() => roomFileInputRef.current?.click()}
                       title={`Send files directly to ${activeGroup.name}`}
                       disabled={!room?.peerOnline || !room?.verified}
+                      aria-label={`Send files directly to ${activeGroup.name}`}
                     >
-                      <ClipIcon width={16} height={16} /> 📎 Send File
+                      <ClipIcon className="wa-btn-icon" width={18} height={18} />
+                      <span className="wa-btn-label">Send Files Back</span>
                     </button>
                   </>
                 ) : (
                   <button
                     type="button"
-                    className="wa-footer-btn reply-btn"
+                    className="wa-footer-btn wa-btn-reply"
                     onClick={() => onOpenDropModal?.(activeGroup.name)}
                     title={`Send files back to ${activeGroup.name}`}
+                    aria-label={`Send files back to ${activeGroup.name}`}
                   >
-                    📤 Send Files Back
+                    <UploadIcon className="wa-btn-icon" width={18} height={18} />
+                    <span className="wa-btn-label">Send Files Back</span>
                   </button>
                 )}
 
+                {/* 2. Save All */}
+                <button
+                  type="button"
+                  className="wa-footer-btn wa-btn-save-all"
+                  onClick={() => handleDownloadAll(activeGroup)}
+                  title={`Save all ${activeGroup.drops.length} files to device`}
+                  aria-label={`Save all ${activeGroup.drops.length} files to device`}
+                >
+                  <DownloadIcon className="wa-btn-icon" width={18} height={18} />
+                  <span className="wa-btn-label">Save All</span>
+                </button>
+
+                {/* 3. Standee QR / Share QR */}
                 {!isGuest ? (
                   <button
                     type="button"
-                    className="wa-footer-btn primary"
+                    className="wa-footer-btn wa-btn-qr"
                     onClick={onPermanentQr}
+                    title="View Standee QR Code"
+                    aria-label="View Standee QR Code"
                   >
-                    ✨ Standee QR
+                    <QrIcon className="wa-btn-icon" width={18} height={18} />
+                    <span className="wa-btn-label">Standee QR</span>
                   </button>
                 ) : (
                   <button
                     type="button"
-                    className="wa-footer-btn primary"
+                    className="wa-footer-btn wa-btn-qr"
                     onClick={onMyQr}
+                    title="Share 2-Minute QR Code"
+                    aria-label="Share 2-Minute QR Code"
                   >
-                    ⚡ Share 2m QR
+                    <QrIcon className="wa-btn-icon" width={18} height={18} />
+                    <span className="wa-btn-label">Share 2m QR</span>
                   </button>
                 )}
               </div>

@@ -26,10 +26,24 @@ export function useDocumay(name, notify, account) {
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState(null);       // { id, peer:{id,name}, role, peerOnline }
   const [items, setItems] = useState([]);       // file cards in the current 1-to-1 room
-  const [dropItems, setDropItems] = useState([]); // outbound drop-box file items
+  const [dropItems, setDropItems] = useState(() => {
+    try {
+      const raw = localStorage.getItem('documay:dropItems');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }); // outbound drop-box file items
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('documay:dropItems', JSON.stringify(dropItems));
+    } catch {}
+  }, [dropItems]);
   const [drops, setDrops] = useState([]);       // inbound drops received for account
   const [qr, setQr] = useState(null);           // { token, link, expiresAt }
   roomRef.current = room;
+
 
   const patch = useCallback((id, fields) => {
     setItems((l) => l.map((i) => (i.id === id ? { ...i, ...fields } : i)));

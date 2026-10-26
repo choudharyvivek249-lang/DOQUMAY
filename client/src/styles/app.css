@@ -1024,8 +1024,11 @@ h1, h2, p { margin: 0; }
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
+
 
 /* Chat Header */
 .wa-chat-header {
@@ -1117,15 +1120,19 @@ h1, h2, p { margin: 0; }
 
 /* Chat Wallpaper & Messages Body */
 .wa-messages-area {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
   overflow-y: auto;
-  padding: 16px 20px;
+  overflow-x: hidden;
+  padding: 16px 16px 24px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   background-image: radial-gradient(#d3c9bf 1px, transparent 1px);
   background-size: 20px 20px;
+  -webkit-overflow-scrolling: touch;
 }
+
 
 .wa-date-pill {
   align-self: center;
@@ -1365,52 +1372,248 @@ h1, h2, p { margin: 0; }
   place-items: center;
 }
 
-/* Chat Footer */
+/* ================= REFINED RESPONSIVE CHAT FOOTER ================= */
 .wa-chat-footer {
-  height: 60px;
-  background: var(--wa-header);
-  border-top: 1px solid var(--wa-border);
+  background: var(--wa-header, #f0f2f5);
+  border-top: 1px solid var(--wa-border, #e9edef);
+  flex: none;
+  width: 100%;
+  height: auto;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px max(10px, env(safe-area-inset-bottom, 10px));
+  box-shadow: 0 -2px 12px rgba(11, 20, 26, 0.04);
+  position: relative;
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+/* Informational Status Row */
+.wa-footer-status-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  gap: 12px;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.wa-footer-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(17, 27, 33, 0.05);
+  border: 1px solid rgba(17, 27, 33, 0.06);
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  color: #54656f;
+  max-width: 100%;
+  line-height: 1.35;
+}
+
+.wa-footer-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: #8696a0;
+}
+.wa-footer-status-dot.active {
+  background: var(--wa-teal, #00a884);
+}
+.wa-footer-status-dot.live {
+  background: var(--wa-green, #25d366);
+  box-shadow: 0 0 6px rgba(37, 211, 102, 0.6);
+  animation: wa-pulse 2s infinite;
+}
+.wa-footer-status-dot.offline {
+  background: #d1d7db;
+}
+
+.wa-footer-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wa-footer-status-text b,
+.wa-footer-status-text .wa-footer-recipient {
+  color: #111b21;
+  font-weight: 700;
+}
+
+.wa-footer-live-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+  text-transform: uppercase;
   flex: none;
 }
-
-.wa-footer-info {
-  font-size: 0.84rem;
-  color: #54656f;
+.wa-footer-live-badge.live {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.wa-footer-live-badge.offline {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
 }
 
+/* Actions Grid on Mobile (Balanced 2-row layout) */
 .wa-footer-actions {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
+  width: 100%;
+  align-items: stretch;
 }
 
+/* Base Footer Button - Accessible 44px Touch Target */
 .wa-footer-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 999px;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
   border: 1px solid #d1d7db;
   background: #ffffff;
   color: #111b21;
-  font-size: 0.84rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .15s;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-sizing: border-box;
+  text-decoration: none;
+  white-space: nowrap;
 }
-.wa-footer-btn.primary {
-  background: var(--wa-teal);
+
+.wa-footer-btn:active {
+  transform: scale(0.98);
+}
+.wa-footer-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.wa-btn-icon {
+  flex: none;
+}
+
+.wa-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 1. Reply / Send Files Back: Primary Prominent Action (Spans full width on narrow mobile) */
+.wa-footer-btn.wa-btn-reply {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #00a884 0%, #075e54 100%);
   color: #ffffff;
-  border-color: transparent;
+  border: 1px solid transparent;
+  box-shadow: 0 2px 8px rgba(7, 94, 84, 0.2);
 }
-.wa-footer-btn.primary:hover {
-  opacity: 0.92;
+.wa-footer-btn.wa-btn-reply:hover:not(:disabled) {
+  background: linear-gradient(135deg, #02b690 0%, #086b60 100%);
+  box-shadow: 0 4px 12px rgba(7, 94, 84, 0.28);
 }
+
+/* 2. Save All: Crisp secondary button */
+.wa-footer-btn.wa-btn-save-all {
+  background: #ffffff;
+  border: 1px solid #d1d7db;
+  color: #111b21;
+}
+.wa-footer-btn.wa-btn-save-all:hover:not(:disabled) {
+  background: #f7f9fa;
+  border-color: #bec5c9;
+}
+
+/* 3. Standee QR: Soft fintech accent */
+.wa-footer-btn.wa-btn-qr {
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  color: #6d28d9;
+}
+.wa-footer-btn.wa-btn-qr:hover:not(:disabled) {
+  background: #ede9fe;
+  border-color: #c4b5fd;
+}
+
+/* Tablet & Landscape (481px to 768px): 3-column single row */
+@media (min-width: 481px) and (max-width: 768px) {
+  .wa-chat-footer {
+    padding: 10px 16px max(10px, env(safe-area-inset-bottom, 10px));
+  }
+  .wa-footer-actions {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .wa-footer-btn.wa-btn-reply {
+    grid-column: auto;
+    order: 2;
+  }
+  .wa-footer-btn.wa-btn-save-all {
+    order: 1;
+  }
+  .wa-footer-btn.wa-btn-qr {
+    order: 3;
+  }
+}
+
+/* Desktop Web Layout (> 768px) */
+@media (min-width: 769px) {
+  .wa-chat-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 64px;
+    padding: 10px 20px;
+    gap: 16px;
+  }
+
+  .wa-footer-status-row {
+    width: auto;
+    justify-content: flex-start;
+  }
+
+  .wa-footer-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    width: auto;
+  }
+
+  .wa-footer-btn {
+    min-height: 42px;
+    height: 42px;
+    border-radius: 999px;
+    padding: 0 18px;
+    width: auto;
+  }
+
+  .wa-footer-btn.wa-btn-save-all {
+    order: 1;
+  }
+  .wa-footer-btn.wa-btn-reply {
+    grid-column: auto;
+    order: 2;
+  }
+  .wa-footer-btn.wa-btn-qr {
+    order: 3;
+  }
+}
+
 
 /* ================= PLACEHOLDER WHEN NO CHAT IS OPEN ================= */
 .wa-chat-placeholder {
@@ -1589,9 +1792,11 @@ h1, h2, p { margin: 0; }
 /* ================= RESPONSIVE BEHAVIOR FOR MOBILE ================= */
 @media (max-width: 768px) {
   .wa-container {
+    height: 100vh;
     height: 100dvh;
     border-radius: 0;
     margin: 0;
+    overflow: hidden;
   }
 
   .wa-sidebar {
@@ -1609,6 +1814,10 @@ h1, h2, p { margin: 0; }
   .wa-has-active-chat .wa-main {
     display: flex;
     width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .wa-back-btn {
@@ -1618,7 +1827,12 @@ h1, h2, p { margin: 0; }
   .wa-btn-header-action .btn-label {
     display: none;
   }
+  .wa-btn-header-action.reply-action {
+    display: none;
+  }
 }
+
+
 
 /* ================= DOQUMAY FINTECH & ANIME ART SURPRISE QR STANDEE (SOFT SHADES) ================= */
 .hero-qr-sheet {
