@@ -37,13 +37,15 @@ export default function TransferRoom({
     const list = Array.from(e.target.files);
     e.target.value = '';
 
-    if (!account) {
-      onOpenAuth?.();
+    if (account) {
+      setPendingFiles(list);
+      setShowPinModal(true);
       return;
     }
 
-    setPendingFiles(list);
-    setShowPinModal(true);
+    // Guest in transfer room: send directly with receiver consent
+    onSend(list, null);
+    setCompletedSendFiles(list);
   };
 
   const handleVerifyPin = async (pinString) => {

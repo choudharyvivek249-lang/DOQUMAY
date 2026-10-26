@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { consumeSendAuthorization, getUser, normalizeUsername, verifySendPin, verifyToken } from './accounts.js';
+import { consumeSendAuthorization, getUser, hasSendPinConfigured, normalizeUsername, verifySendPin, verifyToken } from './accounts.js';
 
 
 import {
@@ -301,33 +301,50 @@ export function registerHandlers(io) {
       const targetUser = getUser(toUsername);
       if (!targetUser) return fail(ack, 'That user account does not exist.');
 
-      // Mandatory 4-digit Send PIN verification on server
-      let authorized = false;
-      if (sendAuthToken) {
-        const authRes = consumeSendAuthorization(sendAuthToken, {
-          username: user?.username,
-          recipient: targetUser.username,
-        });
-        if (!authRes.ok) {
-          return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
-        }
-        authorized = true;
-      } else if (pin && user?.username && user?.token) {
-        const ip = socket.handshake.address || '';
-        const pinRes = await verifySendPin(user.username, user.token, pin, {
-          recipient: targetUser.username,
-          fileCount: 1,
-          ip,
-        });
-        if (!pinRes.ok) {
-          return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
-        }
-        authorized = true;
-      }
+      // Validate sender display name (required, trimmed, 1-24 characters)
+      const rawSender = String(senderName || user?.name || '').trim();
+      if (!rawSender) return fail(ack, 'Please enter your sender name.');
+      if (rawSender.length > 24) return fail(ack, 'Sender name must be 24 characters or fewer.');
+      const cleanSender = cleanName(rawSender, 24);
 
-      if (!authorized) {
-        return fail(ack, 'Authorization required: Please verify your 4-digit Send PIN before sending files.');
+      // Determine identity and PIN security policy
+      const isRegistered = Boolean(user?.username);
+      const hasPinConfigured = isRegistered && hasSendPinConfigured(user.username);
+
+      if (isRegistered && hasPinConfigured) {
+        // Registered user with configured 4-digit Send PIN: strictly require server verification
+        let authorized = false;
+        if (sendAuthToken) {
+          const authRes = consumeSendAuthorization(sendAuthToken, {
+            username: user.username,
+            recipient: targetUser.username,
+          });
+          if (!authRes.ok) {
+            return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
+          }
+          authorized = true;
+        } else if (pin && user.token) {
+          const ip = socket.handshake.address || '';
+          const pinRes = await verifySendPin(user.username, user.token, pin, {
+            recipient: targetUser.username,
+            fileCount: 1,
+            ip,
+          });
+          if (!pinRes.ok) {
+            return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
+          }
+          authorized = true;
+        }
+
+        if (!authorized) {
+          return fail(ack, 'Authorization required: Please verify your 4-digit Send PIN before sending files.');
+        }
       }
+      // Guests and registered accounts without a configured PIN proceed without PIN requirement
+
+      // Rate limit per socket to prevent abuse
+      const active = [...transfers.values()].filter((t) => t.senderId === socket.id && IN_FLIGHT.has(t.status)).length;
+      if (active >= MAX_ACTIVE_PER_USER) return fail(ack, 'Too many files waiting. Let some finish first.');
 
       const fileName = cleanFile(name);
       const ext = fileName.split('.').pop().toLowerCase();
@@ -342,7 +359,8 @@ export function registerHandlers(io) {
         id: crypto.randomUUID(),
         isDrop: true,
         toUsername: targetUser.username.toLowerCase(),
-        senderName: cleanName(senderName || user?.name || 'Someone', 24),
+        senderName: cleanSender,
+        isGuest: !isRegistered,
         senderId: socket.id,
         name: fileName,
         size,
@@ -402,35 +420,48 @@ export function registerHandlers(io) {
       if (!receiverId || !users.has(receiverId)) return fail(ack, 'The other person is no longer connected.');
       const receiverUser = users.get(receiverId);
 
-      // Verify PIN authorization
-      let authorized = false;
-      if (sendAuthToken) {
-        const authRes = consumeSendAuthorization(sendAuthToken, {
-          username: user.username,
-          recipient: receiverUser?.username || receiverUser?.name,
-        });
-        if (!authRes.ok) {
-          return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
-        }
-        authorized = true;
-      } else if (pin && user.username && user.token) {
-        const ip = socket.handshake.address || '';
-        const pinRes = await verifySendPin(user.username, user.token, pin, {
-          recipient: receiverUser?.username || receiverUser?.name,
-          fileCount: 1,
-          ip,
-        });
-        if (!pinRes.ok) {
-          return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
-        }
-        authorized = true;
-      } else if (room.verified) {
-        // Fallback for room-level PIN handshake
-        authorized = true;
-      }
+      // Verify PIN authorization for 1-to-1 room transfer
+      const isRegistered = Boolean(user.username);
+      const hasPinConfigured = isRegistered && hasSendPinConfigured(user.username);
 
-      if (!authorized) {
-        return fail(ack, 'Please verify the 4-digit security PIN before sharing files.');
+      let authorized = false;
+      if (isRegistered && hasPinConfigured) {
+        if (sendAuthToken) {
+          const authRes = consumeSendAuthorization(sendAuthToken, {
+            username: user.username,
+            recipient: receiverUser?.username || receiverUser?.name,
+          });
+          if (!authRes.ok) {
+            return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
+          }
+          authorized = true;
+        } else if (pin && user.token) {
+          const ip = socket.handshake.address || '';
+          const pinRes = await verifySendPin(user.username, user.token, pin, {
+            recipient: receiverUser?.username || receiverUser?.name,
+            fileCount: 1,
+            ip,
+          });
+          if (!pinRes.ok) {
+            return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
+          }
+          authorized = true;
+        } else if (room.verified) {
+          // Room-level PIN handshake verified
+          authorized = true;
+        }
+
+        if (!authorized) {
+          return fail(ack, 'Please verify your 4-digit Send PIN before sharing files.');
+        }
+      } else {
+        // If unpinned or guest in 1-to-1 room, check room-level PIN verification
+        if (room.verified || !room.pin) {
+          authorized = true;
+        }
+        if (!authorized) {
+          return fail(ack, 'Please verify the 4-digit security PIN before sharing files.');
+        }
       }
 
       const fileName = cleanFile(name);

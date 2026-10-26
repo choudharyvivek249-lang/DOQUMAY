@@ -73,6 +73,20 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Lock background page scrolling when modal overlay is open, and cleanly restore when closed
+  useEffect(() => {
+    if (overlay) {
+      const prevOverflow = document.body.style.overflow;
+      const prevTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+        document.body.style.touchAction = prevTouchAction;
+      };
+    }
+  }, [overlay]);
+
   // URL routing for Google Lens / camera QR scans: /receive/:user, ?to=USER, ?u=USER, /to/USER, or /@USER
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -261,6 +275,13 @@ export default function App() {
           <WelcomeScreen
             key="welcome"
             onAccountCreated={handleAuthSuccess}
+            onContinueAsGuest={(guestDisplayName) => {
+              const clean = (guestDisplayName || 'Guest Sender').trim().slice(0, 24);
+              try { sessionStorage.setItem(NAME_KEY, clean); } catch {}
+              setName(clean);
+              setAccount(null);
+              notify(`Welcome, ${clean}!`);
+            }}
             onOpenAuth={() => {
               setAuthInitialMode('login');
               setOverlay('auth');

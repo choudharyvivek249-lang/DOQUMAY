@@ -379,6 +379,17 @@ export function getUser(username) {
   };
 }
 
+export function hasSendPinConfigured(username) {
+  if (!username) return false;
+  const key = normalizeUsername(username);
+  let user = accounts.get(key);
+  if (!user) {
+    getUser(key);
+    user = accounts.get(key);
+  }
+  return Boolean(user && user.pinHash);
+}
+
 export function countAccounts() {
   return accounts.size;
 }

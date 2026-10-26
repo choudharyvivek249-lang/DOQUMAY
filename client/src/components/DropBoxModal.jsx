@@ -82,19 +82,30 @@ export default function DropBoxModal({
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Step 4: Sender presses Send -> Trigger PIN verification
+  // Step 4: Sender presses Send -> Trigger send or PIN verification
   const handleInitiateSend = () => {
     if (!selectedFiles.length) return;
     setError('');
 
-    // If user has not created an account or logged in yet, prompt them to set up account & PIN
-    if (!account) {
-      onOpenAuth?.();
+    // Sender name validation: required, trimmed, 1-24 characters
+    const cleanSender = (senderName || '').trim();
+    if (!cleanSender) {
+      setError('Please enter your sender name (e.g. Rahul Sharma).');
+      return;
+    }
+    if (cleanSender.length > 24) {
+      setError('Sender name must be 24 characters or fewer.');
       return;
     }
 
-    // Display clean 4-digit PIN verification screen
-    setShowPinModal(true);
+    // If registered account: verify 4-digit PIN
+    if (account) {
+      setShowPinModal(true);
+      return;
+    }
+
+    // Guest sender: proceed without account creation or PIN
+    executeAuthorizedSend(null);
   };
 
   // Step 6 & 7: Verify PIN on backend and obtain single-use send authorization token
@@ -219,22 +230,34 @@ export default function DropBoxModal({
 
 
               <p className="lede text-center">
-                Select documents or photos, verify your <b>4-digit Send PIN</b>, and share via WhatsApp.
+                {account
+                  ? 'Select documents or photos, verify your 4-digit Send PIN, and share via WhatsApp.'
+                  : 'Select documents or photos, enter your sender name, and send directly.'}
               </p>
 
               {/* Main Selection & Send View */}
               <div className="drop-form">
                 {error && <div className="auth-error">{error}</div>}
 
-                <label className="field">
-                  <span>Your Sender Name</span>
+                <label className="field sender-name-field">
+                  <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Your Sender Name <b style={{ color: '#ef4444' }}>*</b></span>
+                    {!account && <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: 99 }}>Guest Mode</span>}
+                  </span>
                   <input
                     type="text"
                     value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
+                    onChange={(e) => {
+                      setSenderName(e.target.value);
+                      if (error) setError('');
+                    }}
                     placeholder="e.g. Rahul Sharma"
                     maxLength={24}
+                    required
                   />
+                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: -4 }}>
+                    Shown to @{targetInfo?.displayName || cleanTarget} when they receive your files.
+                  </span>
                 </label>
 
                 {/* Mobile action buttons: Camera Snap & File Picker */}
@@ -335,17 +358,17 @@ export default function DropBoxModal({
                   </div>
                 )}
 
-                {/* Sender Account Notice */}
-                {!account && selectedFiles.length > 0 && (
-                  <div className="wa-disclaimer-box" style={{ background: '#f5f3ff', borderColor: '#c4b5fd' }}>
-                    <span className="wa-disclaimer-icon">🛡️</span>
+                {/* Sender Account Notice / Guest Notice */}
+                {!account && (
+                  <div className="wa-disclaimer-box" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534' }}>
+                    <span className="wa-disclaimer-icon">⚡</span>
                     <p>
-                      A <b>4-digit Send PIN</b> is required to authorize file transfers. You can set up your free account in 10 seconds.
+                      <b>Sending as Guest</b> · No account or PIN needed. Files will be delivered directly to @{targetInfo?.displayName || cleanTarget}.
                     </p>
                   </div>
                 )}
 
-                {/* Send Button -> Opens 4-digit PIN Verification */}
+                {/* Send Button */}
                 <motion.button
                   className="btn btn-primary"
                   onClick={handleInitiateSend}
@@ -356,9 +379,9 @@ export default function DropBoxModal({
                     ? 'Securing & Uploading…'
                     : selectedFiles.length === 0
                     ? 'Select Files to Send'
-                    : !account
-                    ? 'Set Up PIN & Send'
-                    : `Enter PIN & Send ${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''}`}
+                    : account
+                    ? `Enter PIN & Send ${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''}`
+                    : `Send ${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''} as Guest`}
                 </motion.button>
               </div>
             </>
