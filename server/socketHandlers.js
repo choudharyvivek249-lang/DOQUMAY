@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { consumeSendAuthorization, getUser, hasSendPinConfigured, normalizeUsername, verifySendPin, verifyToken } from './accounts.js';
+import { consumeSendAuthorization, getUser, hasSendPinConfigured, normalizeUsername, resolveUser, verifySendPin, verifyToken } from './accounts.js';
 
 
 import {
@@ -161,7 +161,7 @@ export function registerHandlers(io) {
       reply(ack, { ok: true, token, ttlMs: QR_TTL_MS });
     });
 
-    on('qr:scan', ({ token, username }, ack) => {
+    on('qr:scan', async ({ token, username }, ack) => {
       const user = me();
       const now = Date.now();
       user.scans = user.scans.filter((ts) => now - ts < 60_000);
@@ -172,7 +172,13 @@ export function registerHandlers(io) {
       if (username) {
         const clean = normalizeUsername(username);
         if (!clean) return fail(ack, 'Invalid recipient username.');
-        const target = getUser(clean);
+        let target;
+        try {
+          target = await resolveUser(clean);
+        } catch (err) {
+          console.error(`[Sockets] Database error looking up recipient "${clean}":`, err.message);
+          return fail(ack, 'Database service is temporarily unavailable. Please try again shortly.');
+        }
         if (!target) return fail(ack, 'That permanent QR account does not exist.');
         const targetKey = target.username.toLowerCase();
         if (user.username === targetKey) return fail(ack, 'That is your own permanent QR code.');
@@ -298,7 +304,13 @@ export function registerHandlers(io) {
     on('drop:offer', async ({ toUsername, name, size, senderName, sendAuthToken, pin }, ack) => {
       const user = me();
       if (!toUsername) return fail(ack, 'Recipient username is required.');
-      const targetUser = getUser(toUsername);
+      let targetUser;
+      try {
+        targetUser = await resolveUser(toUsername);
+      } catch (err) {
+        console.error(`[Sockets] Database error resolving drop recipient "${toUsername}":`, err.message);
+        return fail(ack, 'Database service is temporarily unavailable. Please try again shortly.');
+      }
       if (!targetUser) return fail(ack, 'That user account does not exist.');
 
       // Validate sender display name (required, trimmed, 1-24 characters)

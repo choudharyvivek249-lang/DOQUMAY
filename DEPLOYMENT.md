@@ -1,95 +1,100 @@
 # Deploying Documay 24/7 Live for Everyone
 
-To keep Documay online **24/7** for everyone with **free HTTPS** (required for phone camera QR code scanning), deploy it to a cloud platform like **Render**, **Koyeb**, or **Railway**.
+To keep Documay online **24/7** for everyone with **free HTTPS** (required for phone camera QR code scanning) and **persistent permanent QR user identities**, deploy it with a managed PostgreSQL database.
 
 ---
 
-## Why Cloud Hosting?
-1. **Always Online (24/7)**: Runs in the cloud even when your PC is turned off.
-2. **Automatic Free HTTPS (SSL)**: Modern mobile browsers (iOS Safari, Android Chrome) block camera access for QR scanning on non-HTTPS connections. Cloud hosts provide HTTPS out of the box.
-3. **WebSockets & Node.js Ready**: Full support for real-time Socket.io pairing and chunked file transfer.
+## The Permanent User Identity Architecture
+
+### Why Did Users Disappear After Deployments Previously?
+Cloud web services such as Render, Railway, and Koyeb run containers on an **ephemeral disk**. When a web service is updated or redeployed from Git:
+1. The old container and its local filesystem are completely destroyed.
+2. A new container is created from the fresh Git commit.
+3. Because `accounts.json` was stored only on the container's local disk (and ignored by `.gitignore`), all registered users created during previous runtime sessions were wiped out upon every deployment!
+4. Visitors scanning `/receive/:username` would subsequently receive a `"User Not Found"` error modal.
+
+### The Solution: Durable PostgreSQL Persistence
+Documay now features a dual-mode persistence architecture:
+- **Production (`DATABASE_URL` configured)**: Automatically connects to managed PostgreSQL with connection pooling (`pg.Pool`), SSL encryption, and idempotent migrations (`CREATE TABLE IF NOT EXISTS users`). User identities, 4-digit PIN hashes, and stable UUIDs persist permanently across all deployments and server restarts.
+- **Local Development (No `DATABASE_URL`)**: Automatically falls back to durable local file storage in `server/data/accounts.json` with atomic writes and `.bak` backups.
+- **Durable Health Check (`/api/health`)**: Inspects database connectivity and returns HTTP `503 Service Unavailable` if the database is disconnected, preventing false `404 User Not Found` reporting.
 
 ---
 
-## Option 1: Render (Recommended – 100% Free)
+## Option 1: Render (Recommended – 100% Free with PostgreSQL)
 
-Render provides free hosting with automatic HTTPS and seamless GitHub integration.
+Render provides free hosting with automatic HTTPS, managed PostgreSQL databases, and seamless GitHub Blueprint integration.
 
-### Step 1: Push your project to GitHub
-If you haven't uploaded your code to GitHub yet:
-1. Create a new repository on [github.com](https://github.com/new) (e.g., `documay`).
-2. Push your code using Git or GitHub Desktop:
-   ```bash
-   git init
-   git add .
-   git commit -m "Deploy Documay"
-   git branch -M main
-   git remote add origin https://github.com/<YOUR_USERNAME>/documay.git
-   git push -u origin main
-   ```
-   *(If you don't have Git installed, install it in PowerShell with: `winget install --id Git.Git -e`)*
+### Method A: Automatic Deployment via Blueprint (Easiest)
+The repository includes a `render.yaml` Blueprint file pre-configured with:
+- The `documay` Node.js web service.
+- The `documay-db` managed PostgreSQL database.
+- Automatic internal binding of `DATABASE_URL`.
 
-### Step 2: Deploy on Render
-1. Go to [render.com](https://render.com) and sign up / log in with your GitHub account.
-2. Click **New +** > **Web Service**.
-3. Select your `documay` GitHub repository.
-4. Render will auto-detect settings, or configure:
-   - **Name**: `documay` (or your preferred name)
-   - **Environment**: `Node`
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm start`
-   - **Health Check Path**: `/api/health`
-5. Click **Create Web Service**.
-6. Within 2 minutes, your site will be live at `https://documay-xxxx.onrender.com`.
+To deploy:
+1. Push your repository to GitHub.
+2. In Render, click **New +** > **Blueprint**.
+3. Connect your GitHub repository.
+4. Render will read `render.yaml`, provision the web service and the PostgreSQL database together, and wire `DATABASE_URL` automatically.
+5. Click **Apply**.
 
-### Step 3: Keep it Awake 24/7 (Prevent Free Sleep)
-Render's free tier spins down after 15 minutes of inactivity. To keep it awake 24/7 for free:
-1. Go to [cron-job.org](https://cron-job.org) or [uptimerobot.com](https://uptimerobot.com) (free accounts).
-2. Create a monitor/cron job:
-   - **URL**: `https://<your-render-subdomain>.onrender.com/api/health`
-   - **Interval**: Every 5 or 10 minutes.
-3. This sends a lightweight ping that keeps your Documay server running 24/7 without ever going to sleep!
-
----
-
-## Option 2: Koyeb (Free Always-On Instance)
-
-Koyeb offers a free Eco instance that runs continuously without spinning down:
-1. Go to [koyeb.com](https://www.koyeb.com) and connect GitHub.
-2. Choose **GitHub repository** > `documay`.
-3. Choose **Dockerfile** (already configured in the repository) or Node build.
-4. Set port to `3001` or let it detect `$PORT`.
-5. Click **Deploy**. Your app is live 24/7 with automatic SSL.
+### Method B: Connecting PostgreSQL to an Existing Web Service
+If you already have `https://doqumay.onrender.com` deployed as a Web Service:
+1. Go to [dashboard.render.com](https://dashboard.render.com).
+2. Click **New +** > **PostgreSQL**.
+3. Fill in the database settings:
+   - **Name**: `documay-db`
+   - **Database**: `documay`
+   - **User**: `documay_user`
+   - **Region**: Same region as your web service (e.g., `Oregon`).
+   - **Plan**: `Free`.
+4. Click **Create Database**.
+5. Once created, scroll down to **Connections** and copy the **Internal Database URL** (e.g. `postgres://documay_user:...@dpg-...-a/documay`).
+6. Navigate to your existing **documay** Web Service in the Render dashboard.
+7. Go to **Environment** tab > **Add Environment Variable**:
+   - **Key**: `DATABASE_URL`
+   - **Value**: *(paste the Internal Database URL copied in Step 5)*
+8. Click **Save Changes**. Render will automatically trigger a deployment.
+9. On startup, Documay connects to PostgreSQL, creates the `users` table and unique username indexes, and logs:
+   `[Database] ✓ PostgreSQL connection established successfully.`
+   `[Database] ✓ PostgreSQL schema verified.`
 
 ---
 
-## Option 3: Railway
+## Restoring User Accounts After Ephemeral Disk Wipes
 
-1. Go to [railway.app](https://railway.app).
-2. Click **New Project** > **Deploy from GitHub repo**.
-3. Railway automatically uses the included `Dockerfile` and `railway.json`.
-4. Under the service settings, click **Generate Domain** to get a public `https://...` address.
-
----
-
-## Recommended Environment Variables
-
-In your cloud host's Environment Variables settings, you can optionally configure:
-
-| Variable | Recommended Value | Purpose |
-| :--- | :--- | :--- |
-| `NODE_ENV` | `production` | Enables production optimizations and security headers. |
-| `PIN_PEPPER` | `any-random-secret-string` | Server-side secret pepper protecting 4-digit PIN hashes. |
-| `PORT` | `3001` *(auto-set by most hosts)* | Port the Node.js server listens on. |
-| `FILE_TTL_MS` | `600000` *(10 minutes)* | Ephemeral file lifetime before automatic deletion. |
+> [!IMPORTANT]
+> **Data Recovery Notice for Past Accounts:**
+> Because user accounts created prior to database configuration were saved only in the temporary container RAM/ephemeral disk, previously lost records cannot be mathematically reconstructed from a username alone (due to one-way scrypt PIN and password hashes).
+> 
+> **How to Re-establish Permanent Accounts:**
+> 1. Complete account registration once on the live site (`https://doqumay.onrender.com`).
+> 2. Create the desired username (e.g. `amir1`), password, and 4-digit numeric Send PIN.
+> 3. The account is instantly written to the persistent PostgreSQL database.
+> 4. All subsequent deployments, container restarts, and Git updates will **permanently preserve** the user, their 4-digit PIN, and their `/receive/:username` QR standee profile!
 
 ---
 
-## Testing Your Live Deployment
+## Environment Variables Reference
 
-1. Open your live URL (e.g. `https://your-app.onrender.com` or `https://...railway.app`) on your computer or phone.
-2. Complete first-time account setup with a username, password, and your personal **4-digit Send PIN** (e.g. `0427`).
-3. Click **Standee QR** to view or share your permanent recipient QR code.
-4. From another phone or browser window, scan the QR code or visit `/?to=your_username`.
-5. Select a file, click **Send**, enter your **4-digit Send PIN** to authorize, and hand off directly to **WhatsApp**!
+| Variable | Required in Production | Purpose | Example / Default |
+| :--- | :--- | :--- | :--- |
+| `DATABASE_URL` | **Yes** | PostgreSQL connection string for permanent user persistence. | `postgres://user:pass@host:5432/documay` |
+| `NODE_ENV` | **Yes** | Enables production mode and strict persistence error handling. | `production` |
+| `PORT` | Auto-set by host | HTTP server port. | `3001` or dynamic `$PORT` |
+| `PIN_PEPPER` | Recommended | Server-side cryptographic secret pepper for 4-digit PIN hashing. | `any-secure-random-string` |
+| `FILE_TTL_MS` | Optional | Ephemeral file lifetime before automatic deletion. | `600000` (10 minutes) |
+
+---
+
+## Verifying the Production Permanent QR Flow
+
+1. Open `/receive/your_username` (e.g. `https://doqumay.onrender.com/receive/amir1`).
+2. When the user exists in PostgreSQL:
+   - Displays avatar, recipient display name, and `📦 24/7 Drop-box Active` (or `● Online` if active in WebSocket).
+   - Allows guests or registered senders to select documents and send files seamlessly.
+3. If an unknown username is entered, returns a genuine `404 User Not Found`.
+4. If the database is ever disconnected, returns `503 Service Unavailable`, preventing false missing-user reports.
+5. Trigger a deployment restart in Render — reload `/receive/your_username` and verify that the user profile remains immediately accessible!
+
 

@@ -8,9 +8,11 @@ import {
   normalizeUsername,
   recoverPinWithPassword,
   registerUser,
+  resolveUser,
   verifySendPin,
   verifyToken,
 } from './accounts.js';
+import { getDbHealth } from './db.js';
 
 import { IMAGE_EXT } from './config.js';
 import { onlineAccounts, transfers } from './state.js';
@@ -18,7 +20,15 @@ import { filePath } from './storage.js';
 
 const router = Router();
 
-router.get('/health', (_req, res) => res.json({ ok: true }));
+router.get('/health', (_req, res) => {
+  const dbHealth = getDbHealth();
+  const isHealthy = dbHealth.connected;
+  res.status(isHealthy ? 200 : 503).json({
+    ok: isHealthy,
+    uptime: process.uptime(),
+    database: dbHealth,
+  });
+});
 
 // Auth: Register with unique username, password, and 4-digit personal Send PIN
 router.post('/auth/register', async (req, res) => {
@@ -78,19 +88,28 @@ router.post('/auth/recover-pin', async (req, res) => {
 });
 
 // User info: look up a permanent profile by username or handle
-router.get('/user/:username', (req, res) => {
+router.get('/user/:username', async (req, res) => {
   const rawParam = req.params.username;
   const clean = normalizeUsername(rawParam);
   if (!clean) {
     return res.status(400).json({ ok: false, error: 'Invalid recipient username.' });
   }
-  const u = getUser(clean);
-  if (!u) {
-    return res.status(404).json({ ok: false, error: 'User not found.' });
+  try {
+    const u = await resolveUser(clean);
+    if (!u) {
+      return res.status(404).json({ ok: false, error: 'User not found.' });
+    }
+    const key = u.username.toLowerCase();
+    const isOnline = onlineAccounts.has(key) && onlineAccounts.get(key).size > 0;
+    res.json({ ok: true, user: { ...u, isOnline } });
+  } catch (err) {
+    console.error(`[Routes] Database error resolving user "${clean}":`, err.message);
+    return res.status(503).json({
+      ok: false,
+      error: 'Database service is temporarily unavailable. Please try again shortly.',
+      isDatabaseError: true,
+    });
   }
-  const key = u.username.toLowerCase();
-  const isOnline = onlineAccounts.has(key) && onlineAccounts.get(key).size > 0;
-  res.json({ ok: true, user: { ...u, isOnline } });
 });
 
 

@@ -15,12 +15,22 @@ test('QR Lookup & Persistence: normalizes handles, resolves recipients, survives
       stdio: ['ignore', 'pipe', 'inherit'],
     });
   };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const waitForReady = async () => {
+    for (let i = 0; i < 30; i++) {
+      try {
+        const r = await fetch(`${BASE}/api/health`);
+        if (r.ok) return;
+      } catch {}
+      await sleep(100);
+    }
+    throw new Error('Server failed to start in time');
+  };
 
   let srv = startServer();
-  await once(srv.stdout, 'data');
+  await waitForReady();
 
   const emit = (s, ev, p = {}) => new Promise((resolve) => s.emit(ev, p, resolve));
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   try {
     const id = Math.floor(100000 + Math.random() * 900000);
@@ -145,7 +155,7 @@ test('QR Lookup & Persistence: normalizes handles, resolves recipients, survives
 
     // Restart the server on the same port
     srv = startServer();
-    await once(srv.stdout, 'data');
+    await waitForReady();
 
     // Lookup recipient again after restart -> MUST BE FOUND!
     const resAfterRestart = await fetch(`${BASE}/api/user/${receiverUsername}`);

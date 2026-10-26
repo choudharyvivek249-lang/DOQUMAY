@@ -34,6 +34,7 @@ export default function DropBoxModal({
   const [showPinModal, setShowPinModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [uploadedResults, setUploadedResults] = useState([]);
+  const [isServiceUnavailable, setIsServiceUnavailable] = useState(false);
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -48,13 +49,19 @@ export default function DropBoxModal({
       }
       try {
         const res = await fetch(`/api/user/${encodeURIComponent(cleanTarget)}`);
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.ok && data.user) {
           setTargetInfo(data.user);
         } else {
-          setError(data.error || 'Recipient not found.');
+          if (res.status === 503 || data.isDatabaseError) {
+            setIsServiceUnavailable(true);
+            setError(data.error || 'Database service is temporarily unavailable. Please try again shortly.');
+          } else {
+            setError(data.error || 'User not found.');
+          }
         }
       } catch {
+        setIsServiceUnavailable(true);
         setError('Could not reach the DoquMay server.');
       } finally {
         setLoading(false);
@@ -208,7 +215,7 @@ export default function DropBoxModal({
             </div>
           ) : error && !targetInfo ? (
             <div className="drop-error">
-              <h2>User Not Found</h2>
+              <h2>{isServiceUnavailable ? 'Service Temporarily Unavailable' : 'User Not Found'}</h2>
               <p className="lede">{error}</p>
               <button className="btn btn-primary" onClick={onClose}>
                 Close

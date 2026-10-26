@@ -1,19 +1,20 @@
 import crypto from 'node:crypto';
-import fsSync from 'node:fs';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
-const ACCOUNTS_BACKUP_FILE = path.join(DATA_DIR, 'accounts.bak.json');
-const SEED_ACCOUNTS_FILE = path.join(__dirname, 'data', 'accounts.seed.json');
+import {
+  closeDb,
+  dbCreateUser,
+  dbGetAllUsers,
+  dbGetUserById,
+  dbGetUserByUsername,
+  dbUpdateUser,
+  initDb,
+  readLocalFileRecords,
+  saveLocalFileRecords,
+} from './db.js';
 
 // Server-side pepper for low-entropy 4-digit PIN protection
 const PIN_PEPPER = process.env.PIN_PEPPER || 'doqumay-send-pin-pepper-secret-2026';
 
-// In-memory cache for fast lookups
+// In-memory cache for ultra-fast lookups (synchronized with persistent database)
 const accounts = new Map(); // lowercase normalized username -> account object
 
 // Send Authorizations map: sendAuthToken -> { id, username, recipient, fileCount, filesUsed, expiresAt, batchId }
@@ -22,12 +23,6 @@ const sendAuthorizations = new Map();
 // Abuse tracker for 4-digit PIN verification rate limiting:
 // trackerKey -> { attempts: number, lockedUntil: number, lastAttempt: number }
 const pinAbuseTracker = new Map();
-
-async function ensureDataDir() {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true, mode: 0o700 });
-  } catch { /* already exists */ }
-}
 
 /**
  * Robust username normalization used everywhere in frontend and backend.
@@ -45,82 +40,41 @@ export function normalizeUsername(raw) {
   return clean;
 }
 
+/**
+ * Loads all persistent accounts from the persistent database into in-memory cache.
+ * Never drops, clears, or resets existing database records.
+ */
 export async function loadAccounts() {
-  await ensureDataDir();
-  let loaded = false;
+  await initDb();
+  accounts.clear();
 
-  // 1. Try reading primary accounts.json
   try {
-    if (fsSync.existsSync(ACCOUNTS_FILE)) {
-      const raw = await fs.readFile(ACCOUNTS_FILE, 'utf-8');
-      const list = JSON.parse(raw);
-      if (Array.isArray(list)) {
-        accounts.clear();
-        for (const u of list) {
-          if (u && u.username) {
-            accounts.set(normalizeUsername(u.username), u);
-          }
+    const list = await dbGetAllUsers();
+    if (Array.isArray(list)) {
+      for (const u of list) {
+        if (u && u.username) {
+          const key = normalizeUsername(u.username);
+          if (!u.id) u.id = crypto.randomUUID();
+          accounts.set(key, u);
         }
-        loaded = true;
       }
     }
+    console.log(`[Accounts] Loaded ${accounts.size} persistent account(s) into cache.`);
   } catch (err) {
-    console.error('Error loading primary accounts.json:', err.message);
-  }
-
-  // 2. Fallback to backup if primary was corrupt or missing
-  if (!loaded || accounts.size === 0) {
-    try {
-      if (fsSync.existsSync(ACCOUNTS_BACKUP_FILE)) {
-        const raw = await fs.readFile(ACCOUNTS_BACKUP_FILE, 'utf-8');
-        const list = JSON.parse(raw);
-        if (Array.isArray(list) && list.length > 0) {
-          for (const u of list) {
-            if (u && u.username) accounts.set(normalizeUsername(u.username), u);
-          }
-          loaded = true;
-          // Restore primary from backup
-          await saveAccounts();
-        }
-      }
-    } catch { /* ignore */ }
-  }
-
-  // 3. Fallback to seed file if brand-new container instance
-  if (!loaded || accounts.size === 0) {
-    try {
-      if (fsSync.existsSync(SEED_ACCOUNTS_FILE)) {
-        const raw = await fs.readFile(SEED_ACCOUNTS_FILE, 'utf-8');
-        const list = JSON.parse(raw);
-        if (Array.isArray(list)) {
-          for (const u of list) {
-            if (u && u.username) accounts.set(normalizeUsername(u.username), u);
-          }
-          await saveAccounts();
-        }
-      }
-    } catch { /* ignore */ }
+    console.error('[Accounts] Failed to load accounts from database:', err.message);
+    // If database threw an error in production, do not silently swallow it
+    if (process.env.NODE_ENV === 'production') {
+      throw err;
+    }
   }
 }
 
 /**
- * Atomically saves accounts to disk using a temp file and rename,
- * ensuring no partial writes or corruption upon sudden process exit.
+ * Backward-compatible saveAccounts function
  */
 export async function saveAccounts() {
-  await ensureDataDir();
   const list = [...accounts.values()];
-  const json = JSON.stringify(list, null, 2);
-  const tmp = path.join(DATA_DIR, `.accounts.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
-  try {
-    await fs.writeFile(tmp, json, 'utf-8');
-    await fs.rename(tmp, ACCOUNTS_FILE);
-    // Write secondary backup asynchronously
-    fs.writeFile(ACCOUNTS_BACKUP_FILE, json, 'utf-8').catch(() => {});
-  } catch (err) {
-    console.error('Failed to save accounts atomically:', err.message);
-    try { await fs.writeFile(ACCOUNTS_FILE, json, 'utf-8'); } catch {}
-  }
+  await saveLocalFileRecords(list);
 }
 
 export function validateUsername(username) {
@@ -132,7 +86,6 @@ export function validateUsername(username) {
   if (!/^[a-zA-Z0-9_-]+$/.test(clean)) return 'Username can only contain letters, numbers, hyphens, and underscores.';
   return null;
 }
-
 
 export function validatePassword(password) {
   if (!password || typeof password !== 'string' || password.length < 4) {
@@ -176,7 +129,7 @@ export function verifyPinHash(pin, user) {
   if (crypto.timingSafeEqual(Buffer.from(legacyHash), Buffer.from(user.pinHash))) {
     // Automatically upgrade to peppered hash
     user.pinHash = testHash;
-    saveAccounts().catch(() => {});
+    dbUpdateUser(user.username, { pinHash: testHash }).catch(() => {});
     return true;
   }
 
@@ -209,7 +162,6 @@ function recordPinFailure(username, ip = '') {
   let maxAttempts = 0;
   for (const k of keys) {
     const entry = pinAbuseTracker.get(k) || { attempts: 0, lockedUntil: 0, lastAttempt: now };
-    // Reset attempts if last attempt was more than 15 minutes ago
     if (now - entry.lastAttempt > 15 * 60 * 1000) {
       entry.attempts = 0;
     }
@@ -243,8 +195,8 @@ function resetPinAbuse(username, ip = '') {
 }
 
 /**
- * Register a persistent user account with a mandatory 4-digit Send PIN.
- * Plaintext PIN is never saved or returned in responses.
+ * Register a persistent user account with a 4-digit Send PIN.
+ * Persists to database with stable internal ID. Plaintext PIN is never stored or returned.
  */
 export async function registerUser(username, password, pin = '1234', confirmPin, displayName) {
   const userErr = validateUsername(username);
@@ -267,33 +219,51 @@ export async function registerUser(username, password, pin = '1234', confirmPin,
 
   const cleanUser = normalizeUsername(username);
   const key = cleanUser;
-  if (accounts.has(key) || getUser(key)) {
+
+  // Check uniqueness in cache and persistent database
+  if (accounts.has(key)) {
+    return { ok: false, error: 'That username is already taken. Please choose another.' };
+  }
+  const existingInDb = await dbGetUserByUsername(key);
+  if (existingInDb) {
+    accounts.set(key, existingInDb);
     return { ok: false, error: 'That username is already taken. Please choose another.' };
   }
 
+  const id = crypto.randomUUID();
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
   const pinHash = hashPin(cleanPin, salt);
   const token = crypto.randomBytes(24).toString('base64url');
   const name = (displayName && String(displayName).trim()) || cleanUser;
+  const now = Date.now();
 
   const user = {
+    id,
     username: cleanUser,
     displayName: name,
     salt,
     hash,
     pinHash,
     token,
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
   };
 
-  accounts.set(key, user);
-  await saveAccounts();
+  try {
+    await dbCreateUser(user);
+    accounts.set(key, user);
+  } catch (err) {
+    if (err.code === 'UNIQUE_VIOLATION' || err.message?.includes('already taken')) {
+      return { ok: false, error: 'That username is already taken. Please choose another.' };
+    }
+    throw err;
+  }
 
   // NEVER return plaintext PIN in API response!
   return {
     ok: true,
-    user: { username: cleanUser, displayName: name, token },
+    user: { id, username: cleanUser, displayName: name, token },
   };
 }
 
@@ -306,8 +276,8 @@ export async function loginUser(username, password, pin) {
   const key = normalizeUsername(username);
   let user = accounts.get(key);
   if (!user) {
-    getUser(key);
-    user = accounts.get(key);
+    user = await dbGetUserByUsername(key);
+    if (user) accounts.set(key, user);
   }
   if (!user) return { ok: false, error: 'Invalid username or password.' };
 
@@ -324,55 +294,56 @@ export async function loginUser(username, password, pin) {
 
   // Refresh auth token on login
   user.token = crypto.randomBytes(24).toString('base64url');
-  await saveAccounts();
+  user.updatedAt = Date.now();
+  await dbUpdateUser(user.username, { token: user.token });
+  accounts.set(key, user);
 
   // NEVER return plaintext PIN! Existing pinHash is safely preserved.
   return {
     ok: true,
-    user: { username: user.username, displayName: user.displayName, token: user.token },
+    user: { id: user.id, username: user.username, displayName: user.displayName, token: user.token },
   };
 }
 
 export function verifyToken(username, token) {
   if (!username || !token) return false;
   const key = normalizeUsername(username);
-  let user = accounts.get(key);
-  if (!user) {
-    getUser(key);
-    user = accounts.get(key);
-  }
+  const user = accounts.get(key);
   return Boolean(user && user.token === token);
 }
 
 /**
- * Looks up a permanent recipient profile by username or handle.
- * Normalizes case, removes leading '@', URL-decodes, and falls back to disk
- * if the user record is not currently in memory.
+ * Fast synchronous lookup of a public profile from memory cache.
+ * Excludes sensitive hashes (hash, salt, pinHash).
  */
 export function getUser(username) {
   const key = normalizeUsername(username);
   if (!key) return null;
+  const user = accounts.get(key);
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    createdAt: user.createdAt,
+  };
+}
+
+/**
+ * Asynchronous user resolution: checks cache first, queries persistent database if missing.
+ * Propagates database errors so callers can distinguish a database outage from a genuine 404.
+ */
+export async function resolveUser(username) {
+  const key = normalizeUsername(username);
+  if (!key) return null;
   let user = accounts.get(key);
   if (!user) {
-    // Disk fallback to ensure lookup works reliably after server restarts
-    try {
-      if (fsSync.existsSync(ACCOUNTS_FILE)) {
-        const raw = fsSync.readFileSync(ACCOUNTS_FILE, 'utf-8');
-        const list = JSON.parse(raw);
-        if (Array.isArray(list)) {
-          for (const u of list) {
-            if (u && u.username) {
-              const k = normalizeUsername(u.username);
-              accounts.set(k, u);
-              if (k === key) user = u;
-            }
-          }
-        }
-      }
-    } catch { /* best effort */ }
+    user = await dbGetUserByUsername(key);
+    if (user) accounts.set(key, user);
   }
   if (!user) return null;
   return {
+    id: user.id,
     username: user.username,
     displayName: user.displayName,
     createdAt: user.createdAt,
@@ -382,11 +353,7 @@ export function getUser(username) {
 export function hasSendPinConfigured(username) {
   if (!username) return false;
   const key = normalizeUsername(username);
-  let user = accounts.get(key);
-  if (!user) {
-    getUser(key);
-    user = accounts.get(key);
-  }
+  const user = accounts.get(key);
   return Boolean(user && user.pinHash);
 }
 
@@ -407,11 +374,10 @@ export async function verifySendPin(username, token, pin, { recipient, fileCount
   const key = normalizeUsername(username);
   let user = accounts.get(key);
   if (!user) {
-    getUser(key);
-    user = accounts.get(key);
+    user = await dbGetUserByUsername(key);
+    if (user) accounts.set(key, user);
   }
   if (!user) return { ok: false, error: 'User account not found.' };
-
 
   // Check rate limit & lockout
   const lockout = checkPinLockout(username, ip);
@@ -424,95 +390,92 @@ export async function verifySendPin(username, token, pin, { recipient, fileCount
     };
   }
 
+  // Validate PIN format
   const pinErr = validatePin(pin);
   if (pinErr) {
-    return { ok: false, error: pinErr };
-  }
-
-  // Progressive delay for repeated attempts (anti-online guessing)
-  const tracker = pinAbuseTracker.get(key);
-  if (tracker && tracker.attempts >= 3) {
-    await new Promise((r) => setTimeout(r, 1500));
-  }
-
-  const isMatch = verifyPinHash(pin, user);
-  if (!isMatch) {
-    const failure = recordPinFailure(username, ip);
-    if (failure.locked) {
-      return {
-        ok: false,
-        error: 'Too many incorrect attempts. Account locked for 5 minutes.',
-        locked: true,
-        remainingSeconds: 300,
-      };
-    }
+    const failInfo = recordPinFailure(username, ip);
     return {
       ok: false,
-      error: `Incorrect 4-digit Send PIN. ${failure.attemptsLeft} attempt${failure.attemptsLeft === 1 ? '' : 's'} remaining before temporary lockout.`,
-      attemptsLeft: failure.attemptsLeft,
+      error: pinErr,
+      attempts: failInfo.attempts,
+      attemptsLeft: failInfo.attemptsLeft,
+      locked: failInfo.locked,
+      remainingSeconds: failInfo.lockSeconds,
     };
   }
 
-  // Correct PIN! Clear abuse counters
+  // Verify PIN against stored hash
+  const isMatch = verifyPinHash(pin, user);
+  if (!isMatch) {
+    const failInfo = recordPinFailure(username, ip);
+    let msg = 'Incorrect 4-digit Send PIN.';
+    if (failInfo.locked) {
+      msg = `Too many incorrect attempts. Account locked for ${failInfo.lockSeconds} seconds.`;
+    } else if (failInfo.attemptsLeft <= 2) {
+      msg = `Incorrect 4-digit Send PIN. ${failInfo.attemptsLeft} attempt${failInfo.attemptsLeft === 1 ? '' : 's'} remaining.`;
+    }
+    return {
+      ok: false,
+      error: msg,
+      attempts: failInfo.attempts,
+      attemptsLeft: failInfo.attemptsLeft,
+      locked: failInfo.locked ? true : undefined,
+      remainingSeconds: failInfo.lockSeconds,
+    };
+  }
+
+  // Successful verification! Reset failed attempts
   resetPinAbuse(username, ip);
 
-  // Issue single-use, short-lived send authorization
-  const count = Math.max(1, parseInt(fileCount, 10) || 1);
-  const cleanRecipient = String(recipient || '').trim().toLowerCase().replace(/^@/, '');
+  // Generate single-use Send Authorization Token
   const sendAuthToken = crypto.randomBytes(24).toString('base64url');
+  const cleanRecipient = recipient ? normalizeUsername(recipient) : null;
+  const count = Math.max(1, parseInt(fileCount, 10) || 1);
+  const now = Date.now();
 
   const authRecord = {
+    id: crypto.randomUUID(),
     token: sendAuthToken,
-    username: key,
+    username: user.username,
     recipient: cleanRecipient,
     fileCount: count,
     filesUsed: 0,
-    batchId: batchId || crypto.randomUUID(),
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 5 * 60 * 1000, // 5-minute TTL
+    batchId: batchId || `batch-${now}-${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: now,
+    expiresAt: now + 5 * 60 * 1000, // Valid for 5 minutes
   };
 
   sendAuthorizations.set(sendAuthToken, authRecord);
 
-  // Clean old authorizations
-  const now = Date.now();
-  for (const [tok, rec] of sendAuthorizations.entries()) {
-    if (rec.expiresAt <= now) sendAuthorizations.delete(tok);
-  }
-
   return {
     ok: true,
     sendAuthToken,
-    expiresAt: authRecord.expiresAt,
-    authorizedCount: count,
+    expiresInSeconds: 300,
+    batchId: authRecord.batchId,
   };
 }
 
 /**
- * Validates and consumes a Send Authorization Token for an outgoing file operation.
- * Binds the authorization to the correct user and recipient.
+ * Consumes a single-use send authorization token on the server.
  */
 export function consumeSendAuthorization(token, { username, recipient } = {}) {
-  if (!token || typeof token !== 'string') {
-    return { ok: false, error: 'Send authorization token is required. Please verify your 4-digit Send PIN.' };
+  if (!token) {
+    return { ok: false, error: 'Send authorization token required.' };
   }
 
   const auth = sendAuthorizations.get(token);
   if (!auth) {
-    return { ok: false, error: 'Send authorization not found or already consumed. Please verify your 4-digit Send PIN.' };
+    return { ok: false, error: 'Send PIN authorization token not found or already consumed.' };
   }
 
   const now = Date.now();
-  if (auth.expiresAt <= now) {
+  if (now > auth.expiresAt) {
     sendAuthorizations.delete(token);
-    return { ok: false, error: 'Send authorization has expired. Please verify your 4-digit Send PIN.' };
+    return { ok: false, error: 'Send authorization token has expired. Please verify your PIN again.' };
   }
 
-  if (username) {
-    const cleanUser = normalizeUsername(username);
-    if (auth.username && auth.username !== cleanUser) {
-      return { ok: false, error: 'Send authorization user mismatch: belongs to a different user account.' };
-    }
+  if (username && auth.username !== normalizeUsername(username)) {
+    return { ok: false, error: 'Send authorization user mismatch.' };
   }
 
   if (recipient) {
@@ -523,7 +486,6 @@ export function consumeSendAuthorization(token, { username, recipient } = {}) {
   }
 
   auth.filesUsed += 1;
-  // If all authorized files in the batch have been consumed, revoke the token
   if (auth.filesUsed >= auth.fileCount) {
     sendAuthorizations.delete(token);
   }
@@ -540,12 +502,11 @@ export async function changePin(username, token, currentCredential, newPin, conf
   const key = normalizeUsername(username);
   let user = accounts.get(key);
   if (!user) {
-    getUser(key);
-    user = accounts.get(key);
+    user = await dbGetUserByUsername(key);
+    if (user) accounts.set(key, user);
   }
   if (!user) return { ok: false, error: 'User not found.' };
 
-  // Validate current credential (can be account password or current PIN)
   const cred = String(currentCredential || '').trim();
   const isPinMatch = /^\d{4}$/.test(cred) && verifyPinHash(cred, user);
   const testHash = crypto.scryptSync(cred, user.salt, 64).toString('hex');
@@ -566,8 +527,10 @@ export async function changePin(username, token, currentCredential, newPin, conf
   }
 
   user.pinHash = hashPin(cleanNew, user.salt);
+  user.updatedAt = Date.now();
   resetPinAbuse(username);
-  await saveAccounts();
+  await dbUpdateUser(user.username, { pinHash: user.pinHash });
+  accounts.set(key, user);
 
   return { ok: true, message: 'Your 4-digit Send PIN has been updated successfully.' };
 }
@@ -578,8 +541,8 @@ export async function recoverPinWithPassword(username, password, newPin, confirm
   const key = normalizeUsername(username);
   let user = accounts.get(key);
   if (!user) {
-    getUser(key);
-    user = accounts.get(key);
+    user = await dbGetUserByUsername(key);
+    if (user) accounts.set(key, user);
   }
   if (!user) return { ok: false, error: 'Invalid username or password.' };
 
@@ -598,9 +561,10 @@ export async function recoverPinWithPassword(username, password, newPin, confirm
   }
 
   user.pinHash = hashPin(cleanNew, user.salt);
+  user.updatedAt = Date.now();
   resetPinAbuse(username);
-  await saveAccounts();
+  await dbUpdateUser(user.username, { pinHash: user.pinHash });
+  accounts.set(key, user);
 
   return { ok: true, message: 'Your 4-digit Send PIN has been recovered and reset successfully.' };
 }
-
