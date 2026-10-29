@@ -6,12 +6,12 @@ test('accounts: registration, unique usernames, and login', async () => {
   const r = Math.random().toString(36).slice(2, 7);
   const alice = `alice_${r}`;
   const bob = `bob_${r}`;
-  const pinUser = `pin_user_${r}`;
 
   // 1. Valid registration
   const reg1 = await registerUser(alice, 'secret123');
   assert.equal(reg1.ok, true);
   assert.equal(reg1.user.username, alice);
+  assert.ok(reg1.user.token);
 
   // 2. Duplicate username rejection (case-insensitive)
   const regDup = await registerUser(alice.toUpperCase(), 'anotherpass');
@@ -39,25 +39,11 @@ test('accounts: registration, unique usernames, and login', async () => {
   const loginNonExistent = await loginUser(`ghost_${r}`, 'anypassword');
   assert.equal(loginNonExistent.ok, false);
 
-  // 8. 4-digit PIN registration and verification
-  const regPin = await registerUser(pinUser, 'secret123', '4321');
-  assert.equal(regPin.ok, true);
-  assert.equal(regPin.user.pin, undefined); // Never return plaintext PIN!
-
-  const loginPinWrong = await loginUser(pinUser, 'secret123', '9999');
-  assert.equal(loginPinWrong.ok, false);
-  assert.match(loginPinWrong.error, /incorrect 4-digit/i);
-
-  const loginPinCorrect = await loginUser(pinUser, 'secret123', '4321');
-  assert.equal(loginPinCorrect.ok, true);
-  assert.equal(loginPinCorrect.user.pin, undefined); // Never return plaintext PIN!
-
-  // 9. Public user lookup
+  // 8. Public user lookup (no sensitive hashes exposed)
   const pub = getUser(alice);
   assert.equal(pub.username, alice);
   assert.equal(pub.salt, undefined); // salt must not be exposed
   assert.equal(pub.hash, undefined); // hash must not be exposed
 
-  console.log('  ✓ accounts, uniqueness, password, and 4-digit PIN validation passed');
+  console.log('  ✓ accounts, uniqueness, and password validation passed (PIN-free)');
 });
-

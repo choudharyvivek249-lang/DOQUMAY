@@ -127,13 +127,16 @@ export async function initDb() {
             display_name VARCHAR(100) NOT NULL,
             salt VARCHAR(64) NOT NULL,
             password_hash VARCHAR(128) NOT NULL,
-            pin_hash VARCHAR(128) NOT NULL,
+            pin_hash VARCHAR(128),
             token VARCHAR(64) NOT NULL,
             created_at BIGINT NOT NULL,
             updated_at BIGINT NOT NULL
           );
           CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username));
         `);
+        try {
+          await client.query('ALTER TABLE users ALTER COLUMN pin_hash DROP NOT NULL;');
+        } catch { /* column already nullable or table just created */ }
         console.log('[Database] ✓ PostgreSQL schema verified.');
 
         // Auto-migrate local seed / existing records if database table is completely empty
@@ -345,7 +348,7 @@ export async function dbCreateUser(user) {
         fullUser.displayName || fullUser.username,
         fullUser.salt,
         fullUser.hash,
-        fullUser.pinHash,
+        fullUser.pinHash || null,
         fullUser.token,
         fullUser.createdAt,
         fullUser.updatedAt,

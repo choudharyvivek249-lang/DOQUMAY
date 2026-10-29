@@ -125,7 +125,7 @@ export default function PermanentQRModal({ account, onClose }) {
 
         ctx.fillStyle = '#64748B';
         ctx.font = '500 20px Manrope, sans-serif';
-        ctx.fillText('1. Scan QR  ·  2. Pick Files  ·  3. Enter 4-digit PIN & Send', 600, 1265);
+        ctx.fillText('1. Scan QR  ·  2. Pick Files  ·  3. Send Instantly', 600, 1265);
 
         // Security footer
         ctx.fillStyle = '#F1F5F9';
@@ -304,7 +304,7 @@ export default function PermanentQRModal({ account, onClose }) {
         )}
 
         <p className="fine text-center" style={{ marginTop: '0.6rem' }}>
-          🔒 Protected by 4-digit Send PIN verification · Auto-deletes in 10 minutes
+          🔒 Direct secure transfer · Auto-deletes in 10 minutes
         </p>
       </motion.section>
     </motion.div>

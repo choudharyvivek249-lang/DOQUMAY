@@ -43,7 +43,6 @@ test('Durable Persistence & Permanent QR Architecture', async () => {
     const randomSuffix = Math.floor(100000 + Math.random() * 900000);
     const testUser = `user_${randomSuffix}`;
     const testPass = 'SecurePass_123';
-    const testPin = '0815'; // 4-digit PIN with leading zero
 
     // ----------------------------------------------------------------------
     // 1. Health check reports database connectivity status
@@ -56,7 +55,7 @@ test('Durable Persistence & Permanent QR Architecture', async () => {
     assert.equal(healthData.database.connected, true);
 
     // ----------------------------------------------------------------------
-    // 2. Register user & verify stable internal ID and 4-digit PIN
+    // 2. Register user & verify stable internal ID (PIN-free)
     // ----------------------------------------------------------------------
     const regRes = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
@@ -64,8 +63,6 @@ test('Durable Persistence & Permanent QR Architecture', async () => {
       body: JSON.stringify({
         username: testUser,
         password: testPass,
-        pin: testPin,
-        confirmPin: testPin,
         displayName: 'Durable Recipient',
       }),
     });
@@ -85,8 +82,6 @@ test('Durable Persistence & Permanent QR Architecture', async () => {
       body: JSON.stringify({
         username: testUser.toUpperCase(), // duplicate despite casing
         password: 'differentPassword',
-        pin: '9999',
-        confirmPin: '9999',
         displayName: 'Duplicate Attempt',
       }),
     });
@@ -158,7 +153,7 @@ test('Durable Persistence & Permanent QR Architecture', async () => {
     assert.equal(dataAfterDeploy.user.username, testUser.toLowerCase());
     assert.equal(dataAfterDeploy.user.displayName, 'Durable Recipient');
 
-    // Sender logins and verifies 4-digit PIN is intact
+    // Sender logins and verifies credentials after restart
     const loginRes = await fetch(`${BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -167,23 +162,6 @@ test('Durable Persistence & Permanent QR Architecture', async () => {
     assert.equal(loginRes.status, 200);
     const loginData = await loginRes.json();
     assert.equal(loginData.user.id, stableId);
-
-    const pinVerifyRes = await fetch(`${BASE}/api/auth/verify-send-pin`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-auth-user': testUser,
-        'x-auth-token': loginData.user.token,
-      },
-      body: JSON.stringify({
-        pin: testPin, // '0815'
-        fileCount: 1,
-      }),
-    });
-    assert.equal(pinVerifyRes.status, 200);
-    const pinVerifyData = await pinVerifyRes.json();
-    assert.equal(pinVerifyData.ok, true);
-    assert.ok(pinVerifyData.sendAuthToken);
 
     // ----------------------------------------------------------------------
     // 9. Guest file send to offline permanent recipient

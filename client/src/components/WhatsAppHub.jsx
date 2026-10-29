@@ -19,8 +19,6 @@ import {
   UploadIcon,
 } from './Icons';
 
-import SecurityPinHandshake from './SecurityPinHandshake';
-
 /**
  * Single file bubble inside a sender's WhatsApp chat thread
  */
@@ -139,8 +137,6 @@ export default function WhatsAppHub({
   room = null,
   roomItems = [],
   onSendRoomFiles,
-  onVerifyPin,
-  onAuthorizeHost,
   onLeaveRoom,
   onDismissDrop,
   onScan,
@@ -148,7 +144,6 @@ export default function WhatsAppHub({
   onMyQr,
   onOpenDropModal,
   onAuth,
-  onOpenPinChange,
   onChangeName,
   onLogout,
   onToggleClassic,
@@ -495,18 +490,6 @@ export default function WhatsAppHub({
                 {/* Actions: View toggle & Logout/Exit */}
                 <div className="wa-profile-section">
                   <div className="wa-profile-bottom-actions">
-                    {account && onOpenPinChange && (
-                      <button
-                        type="button"
-                        className="wa-profile-link-btn"
-                        onClick={() => {
-                          setShowProfile(false);
-                          onOpenPinChange();
-                        }}
-                      >
-                        🛡️ Change 4-Digit Send PIN
-                      </button>
-                    )}
                     <button
                       type="button"
                       className="wa-profile-link-btn"
@@ -804,24 +787,12 @@ export default function WhatsAppHub({
               </div>
             </header>
 
-            {/* Live Room Security PIN Handshake Overlay */}
-            <AnimatePresence>
-              {activeGroup.isLiveRoom && room && !room.verified && (
-                <SecurityPinHandshake
-                  room={room}
-                  onVerifyPin={onVerifyPin}
-                  onAuthorizeHost={onAuthorizeHost}
-                  onCancel={() => { onLeaveRoom?.(); setSelectedKey(null); }}
-                />
-              )}
-            </AnimatePresence>
-
             {/* Chat Messages Body with WhatsApp Wallpaper */}
             <div className="wa-messages-area">
               <div className="wa-date-pill">TODAY</div>
 
               <div className="wa-encryption-notice">
-                🔒 Protected by 4-digit security &amp; end-to-end streaming. Files auto-delete from the server 10 minutes after upload.
+                🔒 Private end-to-end streaming. Files auto-delete from the server 10 minutes after upload.
               </div>
 
               <div className="wa-bubbles-list">
@@ -960,7 +931,7 @@ export default function WhatsAppHub({
                     <div className="wa-ph-card" onClick={onScan}>
                       <div className="wa-ph-icon">📸</div>
                       <b>Live Camera Scanner</b>
-                      <span>Point camera at any QR code to connect and transfer with 4-digit PIN safety.</span>
+                      <span>Point camera at any QR code to connect and transfer files instantly.</span>
                     </div>
                   </>
                 ) : (
@@ -985,7 +956,7 @@ export default function WhatsAppHub({
               </div>
 
               <div className="wa-placeholder-footer">
-                <span>🛡️ 4-digit PIN security · End-to-end encrypted · Auto-deletes in 10 minutes</span>
+                <span>🛡️ Direct secure transfer · End-to-end encrypted · Auto-deletes in 10 minutes</span>
               </div>
             </div>
           </div>

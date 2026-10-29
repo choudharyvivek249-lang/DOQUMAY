@@ -5,7 +5,7 @@ import { CheckDoubleIcon, CloseIcon, CopyIcon, FileIcon } from './Icons';
 
 /**
  * WhatsApp Sharing Handoff Modal.
- * Makes WhatsApp the primary sharing destination after successful 4-digit Send PIN verification.
+ * Makes WhatsApp the primary sharing destination for completed file transfers.
  * Provides native file sharing if available, or official WhatsApp click-to-chat with protected temporary download link.
  * Requires fresh user gesture to launch sharing cleanly.
  */
@@ -117,7 +117,7 @@ ${downloadUrl}
           </div>
           <h2>Ready to Share via WhatsApp</h2>
           <p className="wa-handoff-sub">
-            Verified with your 4-digit Send PIN. Send the protected download link to{' '}
+            Direct secure transfer. Send the protected download link to{' '}
             <b>@{cleanRecipient}</b>.
           </p>
         </div>
@@ -136,7 +136,7 @@ ${downloadUrl}
                 {formatSize(files.reduce((acc, f) => acc + (f.size || 0), 0) || primaryResult.size || 0)} · ⏳ Auto-deletes in 10 minutes
               </span>
             </div>
-            <span className="wa-status-tag-verified">🔒 PIN Verified</span>
+            <span className="wa-status-tag-verified">🔒 Ready to Share</span>
           </div>
         </div>
 

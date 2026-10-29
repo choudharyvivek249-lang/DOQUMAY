@@ -13,7 +13,6 @@ export default function HomeScreen({
   onOpenInbox,
   onOpenWhatsAppHub,
   onAuth,
-  onOpenPinChange,
   onLogout,
   onChangeName,
 }) {
@@ -148,8 +147,6 @@ export default function HomeScreen({
           {account ? (
             <>
               <button className="link" onClick={onPermanentQr}>My Link</button>
-              <span>·</span>
-              <button className="link" onClick={onOpenPinChange}>Change PIN</button>
               <span>·</span>
               <button className="link" onClick={onLogout}>Log Out</button>
             </>

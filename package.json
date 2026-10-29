@@ -9,6 +9,7 @@
     "dev": "concurrently -n server,client -c green,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
     "dev:https": "concurrently -n server,client -c green,magenta \"npm run dev -w server\" \"npm run dev:https -w client\"",
     "build": "npm run build -w client",
+    "test": "npm run test -w server",
     "start": "npm run start -w server"
   },
   "devDependencies": { "concurrently": "^9.0.0" }

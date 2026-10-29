@@ -124,7 +124,7 @@ export default function QRModal({ qr, name, onRefresh, onClose }) {
         )}
 
         <p className="fine text-center" style={{ marginTop: '0.5rem' }}>
-          🔒 Protected by 4-digit Send PIN verification · Auto-deletes in 10 minutes
+          🔒 Direct secure transfer · Auto-deletes in 10 minutes
         </p>
       </motion.section>
     </motion.div>

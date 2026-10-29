@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ACCEPT, cleanUsername, formatSize, kindOf, validateFile } from '../utils/files';
 import Avatar from './Avatar';
 import { CloseIcon, FileIcon, UploadIcon } from './Icons';
-import SendPinModal from './SendPinModal';
 import WhatsAppHandoffModal from './WhatsAppHandoffModal';
 
 const SENDER_NAME_KEY = 'documay:lastSenderName';
@@ -13,7 +12,6 @@ export default function DropBoxModal({
   defaultSenderName,
   account,
   onSendDrop,
-  onVerifySendPin,
   onOpenAuth,
   onClose,
   onComplete,
@@ -22,7 +20,11 @@ export default function DropBoxModal({
   const [targetInfo, setTargetInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [senderName, setSenderName] = useState(() => {
-    return defaultSenderName || account?.displayName || account?.username || localStorage.getItem(SENDER_NAME_KEY) || '';
+    try {
+      return defaultSenderName || account?.displayName || account?.username || sessionStorage.getItem(SENDER_NAME_KEY) || '';
+    } catch {
+      return defaultSenderName || account?.displayName || account?.username || '';
+    }
   });
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [sending, setSending] = useState(false);
@@ -31,7 +33,6 @@ export default function DropBoxModal({
   const [error, setError] = useState('');
 
   // Modals inside DropBox
-  const [showPinModal, setShowPinModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [uploadedResults, setUploadedResults] = useState([]);
   const [isServiceUnavailable, setIsServiceUnavailable] = useState(false);
@@ -70,7 +71,6 @@ export default function DropBoxModal({
     loadInfo();
   }, [cleanTarget]);
 
-
   const addFiles = (newFiles) => {
     const list = Array.from(newFiles || []);
     if (!list.length) return;
@@ -89,7 +89,7 @@ export default function DropBoxModal({
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Step 4: Sender presses Send -> Trigger send or PIN verification
+  // Sender presses Send -> Direct send without PIN
   const handleInitiateSend = () => {
     if (!selectedFiles.length) return;
     setError('');
@@ -105,37 +105,16 @@ export default function DropBoxModal({
       return;
     }
 
-    // If registered account: verify 4-digit PIN
-    if (account) {
-      setShowPinModal(true);
-      return;
-    }
-
-    // Guest sender: proceed without account creation or PIN
-    executeAuthorizedSend(null);
+    executeSend();
   };
 
-  // Step 6 & 7: Verify PIN on backend and obtain single-use send authorization token
-  const handleVerifyPin = async (pinString) => {
-    const batchId = `drop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const res = await onVerifySendPin(pinString, cleanTarget, selectedFiles.length, batchId);
-    if (!res.ok) {
-      return res; // returns error / lockout info to SendPinModal
-    }
-
-    // Authorized! Close PIN modal and start upload with sendAuthToken
-    setShowPinModal(false);
-    executeAuthorizedSend(res.sendAuthToken);
-    return { ok: true };
-  };
-
-  // Step 8: Upload files with valid sendAuthToken
-  const executeAuthorizedSend = async (sendAuthToken) => {
+  // Upload files directly
+  const executeSend = async () => {
     setSending(true);
     setError('');
     const finalSenderName = senderName.trim() || account?.displayName || account?.username || 'Sender';
     try {
-      localStorage.setItem(SENDER_NAME_KEY, finalSenderName);
+      sessionStorage.setItem(SENDER_NAME_KEY, finalSenderName);
     } catch {}
 
     const results = [];
@@ -152,10 +131,8 @@ export default function DropBoxModal({
           (offset, total) => {
             const pct = Math.min(98, Math.round((offset / total) * 100));
             setProgressPercent(pct);
-          },
-          sendAuthToken
+          }
         );
-
 
         if (!res.ok) {
           setError(res.error || `Failed to transfer ${file.name}`);
@@ -168,7 +145,7 @@ export default function DropBoxModal({
       setProgressPercent(100);
       setUploadedResults(results);
 
-      // Step 9: Continue to WhatsApp sharing handoff!
+      // Continue to WhatsApp sharing handoff!
       setShowHandoffModal(true);
     } catch {
       setError('An error occurred during transfer. Please check connection and try again.');
@@ -235,11 +212,8 @@ export default function DropBoxModal({
                 </div>
               </div>
 
-
               <p className="lede text-center">
-                {account
-                  ? 'Select documents or photos, verify your 4-digit Send PIN, and share via WhatsApp.'
-                  : 'Select documents or photos, enter your sender name, and send directly.'}
+                Select documents or photos, enter your sender name, and share directly via WhatsApp.
               </p>
 
               {/* Main Selection & Send View */}
@@ -370,7 +344,7 @@ export default function DropBoxModal({
                   <div className="wa-disclaimer-box" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534' }}>
                     <span className="wa-disclaimer-icon">⚡</span>
                     <p>
-                      <b>Sending as Guest</b> · No account or PIN needed. Files will be delivered directly to @{targetInfo?.displayName || cleanTarget}.
+                      <b>Sending as Guest</b> · No account or login needed. Files will be delivered directly to @{targetInfo?.displayName || cleanTarget}.
                     </p>
                   </div>
                 )}
@@ -386,32 +360,13 @@ export default function DropBoxModal({
                     ? 'Securing & Uploading…'
                     : selectedFiles.length === 0
                     ? 'Select Files to Send'
-                    : account
-                    ? `Enter PIN & Send ${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''}`
-                    : `Send ${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''} as Guest`}
+                    : `Send ${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''}`}
                 </motion.button>
               </div>
             </>
           )}
         </motion.section>
       </motion.div>
-
-      {/* 4-Digit Send PIN Verification Screen Modal */}
-      <AnimatePresence>
-        {showPinModal && (
-          <SendPinModal
-            recipient={cleanTarget}
-            filesCount={selectedFiles.length}
-            totalSize={totalBytes}
-            onVerify={handleVerifyPin}
-            onForgotPin={() => {
-              setShowPinModal(false);
-              onOpenAuth?.();
-            }}
-            onClose={() => setShowPinModal(false)}
-          />
-        )}
-      </AnimatePresence>
 
       {/* WhatsApp Sharing Handoff Modal */}
       <AnimatePresence>
@@ -434,4 +389,3 @@ export default function DropBoxModal({
     </>
   );
 }
-

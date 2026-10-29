@@ -1,11 +1,11 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { consumeSendAuthorization, getUser, hasSendPinConfigured, normalizeUsername, resolveUser, verifySendPin, verifyToken } from './accounts.js';
+import { getUser, normalizeUsername, resolveUser, verifyToken } from './accounts.js';
 
 
 import {
-  ALLOWED_TYPES, CHUNK_MAX_BYTES, FILE_TTL_MS, MAX_ACTIVE_PER_USER, MAX_FILE_BYTES, MAX_STORE_BYTES, QR_TTL_MS,
+  ALLOWED_TYPES, CANCEL_RECORD_TTL_MS, CHUNK_MAX_BYTES, FILE_TTL_MS, MAX_ACTIVE_PER_USER, MAX_FILE_BYTES, MAX_STORE_BYTES, QR_TTL_MS,
 } from './config.js';
 import { IN_FLIGHT, onlineAccounts, qrTokens, rooms, storedBytes, transfers, users } from './state.js';
 import { filePath, removeFile } from './storage.js';
@@ -60,7 +60,7 @@ export function emitUpdate(io, t) {
 
 async function finish(io, t, status) {
   t.status = status;
-  t.expiresAt = Date.now() + 60_000; // keep the tiny record around for a minute so late events resolve
+  t.expiresAt = Date.now() + CANCEL_RECORD_TTL_MS; // keep the tiny record briefly so late events resolve
   await removeFile(t);
   emitUpdate(io, t);
 }
@@ -132,26 +132,11 @@ export function registerHandlers(io) {
         token: verifiedUsername ? token : null,
         roomId: me()?.roomId ?? null,
         scans: [],
+        createdAt: Date.now(),
       });
       reply(ack, { ok: true, me: { id: socket.id, name: clean, username: verifiedUsername } });
     }, { needsUser: false });
 
-    /* ---------- Send PIN Verification & Authorization ---------- */
-    on('auth:verify_send_pin', async ({ username, token, pin, recipient, fileCount, batchId }, ack) => {
-      const user = me();
-      const effectiveUser = username || user?.username;
-      const effectiveToken = token || user?.token;
-
-      if (!effectiveUser || !effectiveToken) {
-        return fail(ack, 'Please log in to your DoquMay account before sending.');
-      }
-      const ip = socket.handshake.address || '';
-      const res = await verifySendPin(effectiveUser, effectiveToken, pin, { recipient, fileCount, batchId, ip });
-      if (!res.ok) {
-        return reply(ack, res);
-      }
-      reply(ack, res);
-    }, { needsUser: false });
 
     /* ---------- QR identity ---------- */
     on('qr:create', (_p, ack) => {
@@ -200,13 +185,11 @@ export function registerHandlers(io) {
         leaveRoom(io, user);
         leaveRoom(io, owner);
 
-        const pin = String(Math.floor(1000 + Math.random() * 9000));
         const room = {
           id: crypto.randomUUID(),
           members: [user.id, owner.id],
           hostId: owner.id,
-          pin,
-          verified: false,
+          verified: true,
         };
         rooms.set(room.id, room);
         user.roomId = owner.roomId = room.id;
@@ -217,17 +200,15 @@ export function registerHandlers(io) {
           roomId: room.id,
           role: 'scanner',
           peer: { id: owner.id, name: owner.name },
-          pin: null,
           isHost: false,
-          verified: false,
+          verified: true,
         });
         io.to(owner.id).emit('room:ready', {
           roomId: room.id,
           role: 'owner',
           peer: { id: user.id, name: user.name },
-          pin,
           isHost: true,
-          verified: false,
+          verified: true,
         });
         return reply(ack, { ok: true });
       }
@@ -243,13 +224,11 @@ export function registerHandlers(io) {
       leaveRoom(io, user);
       leaveRoom(io, owner);
 
-      const pin = String(Math.floor(1000 + Math.random() * 9000));
       const room = {
         id: crypto.randomUUID(),
         members: [user.id, owner.id],
         hostId: owner.id,
-        pin,
-        verified: false,
+        verified: true,
       };
       rooms.set(room.id, room);
       user.roomId = owner.roomId = room.id;
@@ -260,48 +239,23 @@ export function registerHandlers(io) {
         roomId: room.id,
         role: 'scanner',
         peer: { id: owner.id, name: owner.name },
-        pin: null,
         isHost: false,
-        verified: false,
+        verified: true,
       });
       io.to(owner.id).emit('room:ready', {
         roomId: room.id,
         role: 'owner',
         peer: { id: user.id, name: user.name },
-        pin,
         isHost: true,
-        verified: false,
+        verified: true,
       });
       reply(ack, { ok: true });
-    });
-
-    on('room:verify_pin', ({ pin }, ack) => {
-      const user = me();
-      const room = rooms.get(user?.roomId);
-      if (!room) return fail(ack, 'Not in a transfer room.');
-      if (room.verified) return reply(ack, { ok: true, verified: true });
-      if (String(pin || '').trim() !== String(room.pin).trim()) {
-        return fail(ack, 'Incorrect 4-digit PIN. Please check the code on the other device.');
-      }
-      room.verified = true;
-      io.to(room.id).emit('room:verified', { roomId: room.id, verified: true });
-      reply(ack, { ok: true, verified: true });
-    });
-
-    on('room:authorize_host', (_p, ack) => {
-      const user = me();
-      const room = rooms.get(user?.roomId);
-      if (!room) return fail(ack, 'Not in a transfer room.');
-      if (room.hostId !== user.id) return fail(ack, 'Only the host device can authorize.');
-      room.verified = true;
-      io.to(room.id).emit('room:verified', { roomId: room.id, verified: true });
-      reply(ack, { ok: true, verified: true });
     });
 
     on('room:leave', () => leaveRoom(io, me()));
 
     /* ---------- permanent drop-box transfers ---------- */
-    on('drop:offer', async ({ toUsername, name, size, senderName, sendAuthToken, pin }, ack) => {
+    on('drop:offer', async ({ toUsername, name, size, senderName }, ack) => {
       const user = me();
       if (!toUsername) return fail(ack, 'Recipient username is required.');
       let targetUser;
@@ -319,40 +273,7 @@ export function registerHandlers(io) {
       if (rawSender.length > 24) return fail(ack, 'Sender name must be 24 characters or fewer.');
       const cleanSender = cleanName(rawSender, 24);
 
-      // Determine identity and PIN security policy
       const isRegistered = Boolean(user?.username);
-      const hasPinConfigured = isRegistered && hasSendPinConfigured(user.username);
-
-      if (isRegistered && hasPinConfigured) {
-        // Registered user with configured 4-digit Send PIN: strictly require server verification
-        let authorized = false;
-        if (sendAuthToken) {
-          const authRes = consumeSendAuthorization(sendAuthToken, {
-            username: user.username,
-            recipient: targetUser.username,
-          });
-          if (!authRes.ok) {
-            return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
-          }
-          authorized = true;
-        } else if (pin && user.token) {
-          const ip = socket.handshake.address || '';
-          const pinRes = await verifySendPin(user.username, user.token, pin, {
-            recipient: targetUser.username,
-            fileCount: 1,
-            ip,
-          });
-          if (!pinRes.ok) {
-            return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
-          }
-          authorized = true;
-        }
-
-        if (!authorized) {
-          return fail(ack, 'Authorization required: Please verify your 4-digit Send PIN before sending files.');
-        }
-      }
-      // Guests and registered accounts without a configured PIN proceed without PIN requirement
 
       // Rate limit per socket to prevent abuse
       const active = [...transfers.values()].filter((t) => t.senderId === socket.id && IN_FLIGHT.has(t.status)).length;
@@ -424,57 +345,12 @@ export function registerHandlers(io) {
     });
 
     /* ---------- file transfer (1-to-1 rooms) ---------- */
-    on('file:offer', async ({ name, size, sendAuthToken, pin }, ack) => {
+    on('file:offer', async ({ name, size }, ack) => {
       const user = me();
       const room = rooms.get(user.roomId);
       if (!room) return fail(ack, 'Connect with someone first by scanning a QR code.');
       const receiverId = room.members.find((id) => id !== user.id);
       if (!receiverId || !users.has(receiverId)) return fail(ack, 'The other person is no longer connected.');
-      const receiverUser = users.get(receiverId);
-
-      // Verify PIN authorization for 1-to-1 room transfer
-      const isRegistered = Boolean(user.username);
-      const hasPinConfigured = isRegistered && hasSendPinConfigured(user.username);
-
-      let authorized = false;
-      if (isRegistered && hasPinConfigured) {
-        if (sendAuthToken) {
-          const authRes = consumeSendAuthorization(sendAuthToken, {
-            username: user.username,
-            recipient: receiverUser?.username || receiverUser?.name,
-          });
-          if (!authRes.ok) {
-            return fail(ack, authRes.error || 'Invalid or expired 4-digit Send PIN authorization.');
-          }
-          authorized = true;
-        } else if (pin && user.token) {
-          const ip = socket.handshake.address || '';
-          const pinRes = await verifySendPin(user.username, user.token, pin, {
-            recipient: receiverUser?.username || receiverUser?.name,
-            fileCount: 1,
-            ip,
-          });
-          if (!pinRes.ok) {
-            return fail(ack, pinRes.error || 'Incorrect 4-digit Send PIN.');
-          }
-          authorized = true;
-        } else if (room.verified) {
-          // Room-level PIN handshake verified
-          authorized = true;
-        }
-
-        if (!authorized) {
-          return fail(ack, 'Please verify your 4-digit Send PIN before sharing files.');
-        }
-      } else {
-        // If unpinned or guest in 1-to-1 room, check room-level PIN verification
-        if (room.verified || !room.pin) {
-          authorized = true;
-        }
-        if (!authorized) {
-          return fail(ack, 'Please verify the 4-digit security PIN before sharing files.');
-        }
-      }
 
       const fileName = cleanFile(name);
       const ext = fileName.split('.').pop().toLowerCase();

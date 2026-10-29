@@ -15,7 +15,7 @@ Cloud web services such as Render, Railway, and Koyeb run containers on an **eph
 
 ### The Solution: Durable PostgreSQL Persistence
 Documay now features a dual-mode persistence architecture:
-- **Production (`DATABASE_URL` configured)**: Automatically connects to managed PostgreSQL with connection pooling (`pg.Pool`), SSL encryption, and idempotent migrations (`CREATE TABLE IF NOT EXISTS users`). User identities, 4-digit PIN hashes, and stable UUIDs persist permanently across all deployments and server restarts.
+- **Production (`DATABASE_URL` configured)**: Automatically connects to managed PostgreSQL with connection pooling (`pg.Pool`), SSL encryption, and idempotent migrations (`CREATE TABLE IF NOT EXISTS users`). User identities, passwords, and stable UUIDs persist permanently across all deployments and server restarts.
 - **Local Development (No `DATABASE_URL`)**: Automatically falls back to durable local file storage in `server/data/accounts.json` with atomic writes and `.bak` backups.
 - **Durable Health Check (`/api/health`)**: Inspects database connectivity and returns HTTP `503 Service Unavailable` if the database is disconnected, preventing false `404 User Not Found` reporting.
 
@@ -65,13 +65,13 @@ If you already have `https://doqumay.onrender.com` deployed as a Web Service:
 
 > [!IMPORTANT]
 > **Data Recovery Notice for Past Accounts:**
-> Because user accounts created prior to database configuration were saved only in the temporary container RAM/ephemeral disk, previously lost records cannot be mathematically reconstructed from a username alone (due to one-way scrypt PIN and password hashes).
+> Because user accounts created prior to database configuration were saved only in the temporary container RAM/ephemeral disk, previously lost records cannot be mathematically reconstructed from a username alone (due to one-way scrypt password hashes).
 > 
 > **How to Re-establish Permanent Accounts:**
 > 1. Complete account registration once on the live site (`https://doqumay.onrender.com`).
-> 2. Create the desired username (e.g. `amir1`), password, and 4-digit numeric Send PIN.
+> 2. Create the desired username (e.g. `amir1`) and password.
 > 3. The account is instantly written to the persistent PostgreSQL database.
-> 4. All subsequent deployments, container restarts, and Git updates will **permanently preserve** the user, their 4-digit PIN, and their `/receive/:username` QR standee profile!
+> 4. All subsequent deployments, container restarts, and Git updates will **permanently preserve** the user and their `/receive/:username` QR standee profile!
 
 ---
 
@@ -82,7 +82,6 @@ If you already have `https://doqumay.onrender.com` deployed as a Web Service:
 | `DATABASE_URL` | **Yes** | PostgreSQL connection string for permanent user persistence. | `postgres://user:pass@host:5432/documay` |
 | `NODE_ENV` | **Yes** | Enables production mode and strict persistence error handling. | `production` |
 | `PORT` | Auto-set by host | HTTP server port. | `3001` or dynamic `$PORT` |
-| `PIN_PEPPER` | Recommended | Server-side cryptographic secret pepper for 4-digit PIN hashing. | `any-secure-random-string` |
 | `FILE_TTL_MS` | Optional | Ephemeral file lifetime before automatic deletion. | `600000` (10 minutes) |
 
 ---

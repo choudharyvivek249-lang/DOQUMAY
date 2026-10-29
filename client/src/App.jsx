@@ -6,7 +6,6 @@ import HomeScreen from './components/HomeScreen';
 import InboxModal from './components/InboxModal';
 import IncomingModal from './components/IncomingModal';
 import PermanentQRModal from './components/PermanentQRModal';
-import PinChangeModal from './components/PinChangeModal';
 import QRModal from './components/QRModal';
 import QRScanner from './components/QRScanner';
 import TransferRoom from './components/TransferRoom';
@@ -59,7 +58,7 @@ export default function App() {
     });
   };
 
-  const [overlay, setOverlay] = useState(null); // 'qr' | 'permQr' | 'scan' | 'auth' | 'inbox' | 'drop' | 'pinChange' | null
+  const [overlay, setOverlay] = useState(null); // 'qr' | 'permQr' | 'scan' | 'auth' | 'inbox' | 'drop' | null
   const [authInitialMode, setAuthInitialMode] = useState('login');
   const [dropTarget, setDropTarget] = useState(null); // username when dropping files
   const [toast, setToast] = useState(null);
@@ -200,7 +199,6 @@ export default function App() {
             onBack={dm.leave}
             onSend={dm.sendFiles}
             onCancel={dm.cancel}
-            onVerifySendPin={dm.verifySendPin}
             onOpenWhatsApp={() => {
               setViewMode('whatsapp');
               try { localStorage.setItem(VIEW_MODE_KEY, 'whatsapp'); } catch {}
@@ -221,8 +219,6 @@ export default function App() {
             room={dm.room}
             roomItems={dm.items}
             onSendRoomFiles={dm.sendFiles}
-            onVerifyPin={dm.verifyPin}
-            onAuthorizeHost={dm.authorizeHost}
             onLeaveRoom={dm.leave}
             onDismissDrop={dm.dismissDrop}
             onScan={() => setOverlay('scan')}
@@ -242,7 +238,6 @@ export default function App() {
               setAuthInitialMode('login');
               setOverlay('auth');
             }}
-            onOpenPinChange={() => setOverlay('pinChange')}
             onChangeName={handleChangeName}
             onLogout={handleLogout}
             onToggleClassic={toggleViewMode}
@@ -267,7 +262,6 @@ export default function App() {
               setAuthInitialMode('login');
               setOverlay('auth');
             }}
-            onOpenPinChange={() => setOverlay('pinChange')}
             onLogout={handleLogout}
             onChangeName={handleChangeName}
           />
@@ -326,16 +320,6 @@ export default function App() {
           />
         )}
 
-        {overlay === 'pinChange' && account && (
-          <PinChangeModal
-            key="pinChange"
-            account={account}
-            onClose={() => setOverlay(null)}
-            onSuccess={() => notify('Send PIN updated successfully.')}
-            notify={notify}
-          />
-        )}
-
         {overlay === 'inbox' && (
           <InboxModal
             key="inbox"
@@ -352,7 +336,6 @@ export default function App() {
             defaultSenderName={name}
             account={account}
             onSendDrop={dm.sendDrop}
-            onVerifySendPin={dm.verifySendPin}
             onOpenAuth={() => {
               setAuthInitialMode('register');
               setOverlay('auth');

@@ -2,8 +2,8 @@
 // Runs the real server on port 3055 with short timers (QR 2s, files 5s).
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { once } from 'node:events';
 import crypto from 'node:crypto';
+import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { io } from 'socket.io-client';
 
@@ -31,6 +31,7 @@ try {
   assert.equal((await emit(priya, 'qr:scan', { token })).ok, true);
   const [r1, r2] = await Promise.all([readyP, readyP2]);
   assert.equal(r2.peer.name, 'Rahul Sharma'); assert.equal(r1.peer.name, 'Priya'); ok('1-to-1 room created, both sides told who they are paired with');
+  assert.equal(r1.verified, true); assert.equal(r2.verified, true); ok('room immediately unlocked without PIN');
   assert.equal((await emit(priya, 'qr:scan', { token })).ok, false); ok('a QR works only once');
 
   // --- expired QR
@@ -38,11 +39,7 @@ try {
   const exp = await emit(priya, 'qr:scan', { token: t2 });
   assert.equal(exp.ok, false); assert.match(exp.error, /expired/); ok('QR expires after its TTL');
 
-  // --- rules & 4-digit PIN security
-  assert.equal((await emit(priya, 'file:offer', { name: 'Report.pdf', size: 100 })).ok, false); ok('rejects file before 4-digit PIN verified');
-  assert.equal((await emit(priya, 'room:verify_pin', { pin: '0000' })).ok, false); ok('rejects wrong 4-digit PIN');
-  assert.equal((await emit(priya, 'room:verify_pin', { pin: r1.pin })).ok, true); ok('accepts correct 4-digit PIN and unlocks transfer');
-
+  // --- rules & file type validation
   assert.equal((await emit(priya, 'file:offer', { name: 'virus.exe', size: 10 })).ok, false); ok('rejects .exe');
   assert.equal((await emit(priya, 'file:offer', { name: 'big.pdf', size: 100 * 1024 * 1024 + 1 })).ok, false); ok('rejects > 100 MB');
 

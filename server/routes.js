@@ -2,14 +2,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { Router } from 'express';
 import {
-  changePin,
   getUser,
   loginUser,
   normalizeUsername,
-  recoverPinWithPassword,
   registerUser,
   resolveUser,
-  verifySendPin,
   verifyToken,
 } from './accounts.js';
 import { getDbHealth } from './db.js';
@@ -30,18 +27,15 @@ router.get('/health', (_req, res) => {
   });
 });
 
-// Auth: Register with unique username, password, and 4-digit personal Send PIN
+// Auth: Register with unique username and password
 router.post('/auth/register', async (req, res) => {
-  const { username, password, pin, confirmPin, displayName } = req.body || {};
-  if (!pin || !/^\d{4}$/.test(String(pin).trim())) {
-    return res.status(400).json({ ok: false, error: 'Please enter a 4-digit numeric Send PIN.' });
-  }
-  const result = await registerUser(username, password, pin, confirmPin, displayName);
+  const { username, password, displayName } = req.body || {};
+  const result = await registerUser(username, password, displayName);
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
 });
 
-// Auth: Log in with username and password (preserves existing 4-digit PIN)
+// Auth: Log in with username and password
 router.post('/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
@@ -49,41 +43,6 @@ router.post('/auth/login', async (req, res) => {
   }
   const result = await loginUser(username, password);
   if (!result.ok) return res.status(401).json(result);
-  res.json(result);
-});
-
-// Auth: Verify 4-digit Send PIN before sending file(s)
-// Returns short-lived single-use sendAuthToken
-router.post('/auth/verify-send-pin', async (req, res) => {
-  const username = String(req.headers['x-auth-user'] || req.body?.username || '');
-  const token = String(req.headers['x-auth-token'] || req.body?.token || '');
-  const { pin, recipient, fileCount, batchId } = req.body || {};
-  const ip = String(req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '');
-
-  const result = await verifySendPin(username, token, pin, { recipient, fileCount, batchId, ip });
-  if (!result.ok) {
-    const statusCode = result.locked ? 429 : 401;
-    return res.status(statusCode).json(result);
-  }
-  res.json(result);
-});
-
-// Auth: Change 4-digit Send PIN
-router.post('/auth/change-pin', async (req, res) => {
-  const username = String(req.headers['x-auth-user'] || req.body?.username || '');
-  const token = String(req.headers['x-auth-token'] || req.body?.token || '');
-  const { currentCredential, newPin, confirmNewPin } = req.body || {};
-
-  const result = await changePin(username, token, currentCredential, newPin, confirmNewPin);
-  if (!result.ok) return res.status(400).json(result);
-  res.json(result);
-});
-
-// Auth: Recover 4-digit Send PIN using account password
-router.post('/auth/recover-pin', async (req, res) => {
-  const { username, password, newPin, confirmNewPin } = req.body || {};
-  const result = await recoverPinWithPassword(username, password, newPin, confirmNewPin);
-  if (!result.ok) return res.status(400).json(result);
   res.json(result);
 });
 
@@ -145,7 +104,7 @@ router.get('/drops', (req, res) => {
 router.get('/files/:id', (req, res) => {
   const t = transfers.get(req.params.id);
   const key = String(req.query.key || '');
-  const valid = t && t.status === 'ready' && key.length === t.key.length
+  const valid = t && t.status === 'ready' && t.expiresAt > Date.now() && key.length === t.key.length
     && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(t.key));
   if (!valid) return res.status(404).json({ error: 'This file is gone. Files are deleted 10 minutes after they are sent.' });
 

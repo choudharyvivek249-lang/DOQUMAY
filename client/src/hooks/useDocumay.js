@@ -9,6 +9,7 @@ const FINISHED = ['rejected', 'cancelled', 'failed', 'expired'];
 
 /**
  * All real-time logic: connection, pairing (ephemeral & permanent), consent, chunked uploads, and drop-box.
+ * NO history persistence — all transfer data is ephemeral and lives only in-memory.
  */
 export function useDocumay(name, notify, account) {
   const socketRef = useRef(null);
@@ -26,24 +27,28 @@ export function useDocumay(name, notify, account) {
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState(null);       // { id, peer:{id,name}, role, peerOnline }
   const [items, setItems] = useState([]);       // file cards in the current 1-to-1 room
-  const [dropItems, setDropItems] = useState(() => {
-    try {
-      const raw = localStorage.getItem('documay:dropItems');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  }); // outbound drop-box file items
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('documay:dropItems', JSON.stringify(dropItems));
-    } catch {}
-  }, [dropItems]);
+  const [dropItems, setDropItems] = useState([]); // outbound drop-box file items (in-memory only, no localStorage)
   const [drops, setDrops] = useState([]);       // inbound drops received for account
   const [qr, setQr] = useState(null);           // { token, link, expiresAt }
   roomRef.current = room;
 
+  // Prune expired items from both items and dropItems every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setItems((l) => l.filter((i) => {
+        if (FINISHED.includes(i.status) && i.expiresAt && i.expiresAt <= now) return false;
+        return true;
+      }));
+      setDropItems((l) => l.filter((i) => {
+        if (i.expiresAt && i.expiresAt <= now) return false;
+        if (FINISHED.includes(i.status)) return false;
+        return true;
+      }));
+      setDrops((l) => l.filter((d) => !d.expiresAt || d.expiresAt > now));
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
 
   const patch = useCallback((id, fields) => {
     setItems((l) => l.map((i) => (i.id === id ? { ...i, ...fields } : i)));
@@ -142,9 +147,9 @@ export function useDocumay(name, notify, account) {
       setConnected(false);
       setRoom((r) => (r ? { ...r, peerOnline: false } : r));
     });
-    socket.on('connect_error', () => notifyRef.current('Can’t reach the DoquMay server.'));
+    socket.on('connect_error', () => notifyRef.current("Can't reach the DoquMay server."));
 
-    socket.on('room:ready', ({ roomId, peer, role, pin, isHost, verified }) => {
+    socket.on('room:ready', ({ roomId, peer, role, isHost, verified }) => {
       files.current.clear();
       stopped.current.clear();
       setItems([]);
@@ -153,17 +158,10 @@ export function useDocumay(name, notify, account) {
         id: roomId,
         peer,
         role,
-        pin: pin || null,
         isHost: Boolean(isHost),
-        verified: Boolean(verified),
+        verified: Boolean(verified ?? true),
         peerOnline: true,
       });
-    });
-
-    socket.on('room:verified', ({ roomId }) => {
-      playNotificationSound();
-      notifyRef.current('🛡️ Device security verified! Safe file transfer unlocked.');
-      setRoom((r) => (r && r.id === roomId ? { ...r, verified: true } : r));
     });
 
     socket.on('peer:left', ({ roomId }) => setRoom((r) => (r && r.id === roomId ? { ...r, peerOnline: false } : r)));
@@ -192,7 +190,7 @@ export function useDocumay(name, notify, account) {
     return () => {
       socket.close();
       socketRef.current = null;
-      setConnected(false); setRoom(null); setItems([]); setQr(null); setDrops([]);
+      setConnected(false); setRoom(null); setItems([]); setQr(null); setDrops([]); setDropItems([]);
     };
   }, [name, account?.username, account?.token, patch, upload]);
 
@@ -205,7 +203,7 @@ export function useDocumay(name, notify, account) {
 
   const scan = useCallback(async (text) => {
     const target = parseScanTarget(text);
-    if (!target) return { ok: false, error: 'That doesn’t look like a DoquMay QR code or user link.' };
+    if (!target) return { ok: false, error: "That doesn't look like a DoquMay QR code or user link." };
     if (target.type === 'token') {
       return call('qr:scan', { token: target.token });
     }
@@ -214,35 +212,11 @@ export function useDocumay(name, notify, account) {
     }
   }, [call]);
 
-  const verifySendPin = useCallback(async (pin, recipient, fileCount = 1, batchId = '') => {
-    const username = accountRef.current?.username;
-    const token = accountRef.current?.token;
-    if (!username || !token) {
-      return { ok: false, error: 'Please log in or set up your DoquMay account before sending.' };
-    }
-
-    try {
-      const res = await fetch(`${SERVER}/api/auth/verify-send-pin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-user': username,
-          'x-auth-token': token,
-        },
-        body: JSON.stringify({ pin, recipient, fileCount, batchId }),
-      });
-      const data = await res.json();
-      return data;
-    } catch {
-      return { ok: false, error: 'Cannot reach server to verify PIN. Check your connection.' };
-    }
-  }, []);
-
-  const sendFiles = useCallback(async (list, sendAuthToken) => {
+  const sendFiles = useCallback(async (list) => {
     for (const file of Array.from(list)) {
       const problem = validateFile(file);
       if (problem) { notifyRef.current(`${file.name}: ${problem}`); continue; }
-      const res = await call('file:offer', { name: file.name, size: file.size, sendAuthToken });
+      const res = await call('file:offer', { name: file.name, size: file.size });
       if (!res.ok) { notifyRef.current(res.error); continue; }
       files.current.set(res.id, file);
       setItems((l) => [...l, {
@@ -252,14 +226,15 @@ export function useDocumay(name, notify, account) {
     }
   }, [call]);
 
-  const sendDrop = useCallback(async (toUsername, file, senderName, onProgress, sendAuthToken) => {
+  const sendDrop = useCallback(async (toUsername, file, senderName, onProgress) => {
     const problem = validateFile(file);
     if (problem) { notifyRef.current(`${file.name}: ${problem}`); return { ok: false, error: problem }; }
-    const res = await call('drop:offer', { toUsername, name: file.name, size: file.size, senderName, sendAuthToken });
+    const res = await call('drop:offer', { toUsername, name: file.name, size: file.size, senderName });
     if (!res.ok) { notifyRef.current(res.error); return res; }
     files.current.set(res.id, file);
     setDropItems((l) => [...l, {
       id: res.id, name: file.name, size: file.size, toUsername, ts: res.ts, status: 'accepted', received: 0,
+      expiresAt: Date.now() + 600000,
     }]);
     const up = await upload(res.id, onProgress);
     return up.ok ? { ok: true, id: res.id } : up;
@@ -289,27 +264,8 @@ export function useDocumay(name, notify, account) {
     setItems([]);
   }, [call]);
 
-  const verifyPin = useCallback(async (pin) => {
-    const res = await call('room:verify_pin', { pin });
-    if (!res.ok) {
-      notifyRef.current(res.error || 'Incorrect 4-digit PIN.');
-      return { ok: false, error: res.error };
-    }
-    return { ok: true };
-  }, [call]);
-
-  const authorizeHost = useCallback(async () => {
-    const res = await call('room:authorize_host');
-    if (!res.ok) {
-      notifyRef.current(res.error || 'Could not authorize.');
-      return { ok: false, error: res.error };
-    }
-    return { ok: true };
-  }, [call]);
-
   return {
     connected, room, items, dropItems, drops, qr,
     createQr, scan, sendFiles, sendDrop, dismissDrop, fetchDrops, respond, cancel, leave,
-    verifyPin, authorizeHost, verifySendPin,
   };
 }

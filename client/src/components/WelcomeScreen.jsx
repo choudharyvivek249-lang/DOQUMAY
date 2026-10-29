@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { DoquMayLogo } from './Icons';
 
 export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onOpenAuth }) {
@@ -9,50 +9,11 @@ export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onO
   // Register mode state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [pinDigits, setPinDigits] = useState(['', '', '', '']);
-  const [confirmDigits, setConfirmDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const pinRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
-  const confirmRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
-
   const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-  const pinStr = pinDigits.join('');
-  const confirmPinStr = confirmDigits.join('');
-
-  const isReady =
-    cleanUser.length >= 3 &&
-    password.length >= 4 &&
-    pinStr.length === 4 &&
-    confirmPinStr.length === 4;
-
-  const handleDigitChange = (digits, setDigits, refs, index, char) => {
-    setError('');
-    const clean = char.replace(/\D/g, '');
-
-    if (clean.length >= 4) {
-      const parts = clean.slice(0, 4).split('');
-      setDigits(parts);
-      refs[3].current?.focus();
-      return;
-    }
-
-    const single = clean.slice(-1);
-    const updated = [...digits];
-    updated[index] = single;
-    setDigits(updated);
-
-    if (single && index < 3) {
-      refs[index + 1].current?.focus();
-    }
-  };
-
-  const handleKeyDown = (digits, refs, index, e) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      refs[index - 1].current?.focus();
-    }
-  };
+  const isReady = cleanUser.length >= 3 && password.length >= 4;
 
   const handleGuestSubmit = (e) => {
     e.preventDefault();
@@ -66,9 +27,6 @@ export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onO
 
     if (cleanUser.length < 3) return setError('Username must be at least 3 characters.');
     if (password.length < 4) return setError('Password must be at least 4 characters.');
-    if (pinStr.length !== 4) return setError('Send PIN must contain exactly 4 numeric digits.');
-    if (confirmPinStr.length !== 4) return setError('Please confirm your 4-digit Send PIN.');
-    if (pinStr !== confirmPinStr) return setError('4-digit Send PIN and confirmation do not match.');
 
     setLoading(true);
     try {
@@ -78,8 +36,6 @@ export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onO
         body: JSON.stringify({
           username: cleanUser,
           password,
-          pin: pinStr,
-          confirmPin: confirmPinStr,
           displayName: username.trim(),
         }),
       });
@@ -134,7 +90,7 @@ export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onO
             onClick={() => { setMode('guest'); setError(''); }}
           >
             <span>🚀 Continue as Guest</span>
-            <span className="tab-pill-sub">No password or PIN</span>
+            <span className="tab-pill-sub">No password needed</span>
           </button>
           <button
             type="button"
@@ -156,7 +112,7 @@ export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onO
             <div className="wa-disclaimer-box" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534', textAlign: 'left' }}>
               <span className="wa-disclaimer-icon" style={{ fontSize: '1.25rem' }}>🚀</span>
               <p>
-                <b>Instant Guest Sending:</b> No registration, password, or PIN setup needed. Scan any recipient's QR standee and send documents in seconds.
+                <b>Instant Guest Sending:</b> No registration or password required. Scan any recipient's QR standee and send documents in seconds.
               </p>
             </div>
 
@@ -197,7 +153,7 @@ export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onO
               <span>🔑</span>
               <div className="btn-col">
                 <b>Already Have an Account? Log In</b>
-                <span className="sub">Preserves your existing 4-digit PIN &amp; Permanent QR</span>
+                <span className="sub">Preserves your Permanent QR &amp; Drop-box</span>
               </div>
             </motion.button>
           </form>
@@ -236,89 +192,28 @@ export default function WelcomeScreen({ onAccountCreated, onContinueAsGuest, onO
               />
             </label>
 
-            {/* 4-Digit Personal Send PIN */}
-            <div className="field pin-field-block">
-              <label className="pin-field-label">
-                <span>🛡️ Personal 4-Digit Send PIN</span>
-                <span className="pin-field-hint">Required whenever you send files (accepts leading zeroes, e.g. 0427)</span>
-              </label>
-              <div className="security-pin-inputs">
-                {pinDigits.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={pinRefs[i]}
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleDigitChange(pinDigits, setPinDigits, pinRefs, i, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(pinDigits, pinRefs, i, e)}
-                    className={`pin-digit-box ${digit ? 'filled' : ''}`}
-                    placeholder="•"
-                    aria-label={`Send PIN Digit ${i + 1}`}
-                    required
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Confirm 4-Digit Send PIN */}
-            <div className="field pin-field-block">
-              <label className="pin-field-label">
-                <span>🛡️ Confirm 4-Digit Send PIN</span>
-                <span className="pin-field-hint">Re-enter your 4-digit PIN</span>
-              </label>
-              <div className="security-pin-inputs">
-                {confirmDigits.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={confirmRefs[i]}
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleDigitChange(confirmDigits, setConfirmDigits, confirmRefs, i, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(confirmDigits, confirmRefs, i, e)}
-                    className={`pin-digit-box ${digit ? 'filled' : ''}`}
-                    placeholder="•"
-                    aria-label={`Confirm PIN Digit ${i + 1}`}
-                    required
-                  />
-                ))}
-              </div>
-            </div>
-
             <motion.button
               type="submit"
               className="btn btn-primary"
-              disabled={!isReady || loading}
+              style={{ width: '100%', minHeight: 54, marginTop: 8 }}
+              disabled={loading || !isReady}
               whileTap={{ scale: 0.97 }}
             >
-              {loading ? 'Setting Up Account…' : '⚡ Create Account & Standee QR'}
+              {loading ? 'Creating Account…' : '✨ Create Account & Standee QR'}
             </motion.button>
 
-            <div className="welcome-divider">
-              <span>or</span>
+            <div className="fine text-center" style={{ marginTop: 12 }}>
+              <span>Already have an account? </span>
+              <button
+                type="button"
+                className="link inline"
+                onClick={onOpenAuth}
+              >
+                Log in here
+              </button>
             </div>
-
-            <motion.button
-              type="button"
-              className="btn btn-permanent-outline"
-              onClick={onOpenAuth}
-              whileTap={{ scale: 0.97 }}
-            >
-              <span>🔑</span>
-              <div className="btn-col">
-                <b>Already Have an Account? Log In</b>
-                <span className="sub">Preserves your existing 4-digit PIN &amp; Permanent QR</span>
-              </div>
-            </motion.button>
           </form>
         )}
-
-        <p className="fine">Files are deleted automatically 10 minutes after they’re sent.</p>
       </div>
     </motion.main>
   );

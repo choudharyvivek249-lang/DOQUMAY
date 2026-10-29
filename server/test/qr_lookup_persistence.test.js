@@ -38,7 +38,7 @@ test('QR Lookup & Persistence: normalizes handles, resolves recipients, survives
     const senderUsername = `sender_${id}`;
 
     // ----------------------------------------------------
-    // 1. Register a persistent user account with 4-digit PIN
+    // 1. Register a persistent user account (PIN-free)
     // ----------------------------------------------------
     const regRes = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
@@ -46,8 +46,6 @@ test('QR Lookup & Persistence: normalizes handles, resolves recipients, survives
       body: JSON.stringify({
         username: receiverUsername,
         password: 'password123',
-        pin: '0427',
-        confirmPin: '0427',
         displayName: 'Dr. Rahul Sharma',
       }),
     });
@@ -62,8 +60,6 @@ test('QR Lookup & Persistence: normalizes handles, resolves recipients, survives
       body: JSON.stringify({
         username: senderUsername,
         password: 'password456',
-        pin: '1234',
-        confirmPin: '1234',
         displayName: 'Priya Verma',
       }),
     });
@@ -175,24 +171,6 @@ test('QR Lookup & Persistence: normalizes handles, resolves recipients, survives
     assert.equal(loginAfterRestart.status, 200);
     const refreshedToken = loginData.user.token;
 
-    // Sender sends file to persistent standee recipient with 4-digit PIN verification
-    const pinRes = await fetch(`${BASE}/api/auth/verify-send-pin`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-auth-user': senderUsername,
-        'x-auth-token': refreshedToken,
-      },
-      body: JSON.stringify({
-        pin: '1234',
-        recipient: receiverUsername,
-        fileCount: 1,
-      }),
-    });
-    const pinData = await pinRes.json();
-    assert.equal(pinRes.status, 200);
-    assert.ok(pinData.sendAuthToken);
-
     const senderSocket = io(BASE, { transports: ['websocket'] });
     await once(senderSocket, 'connect');
     await emit(senderSocket, 'session:start', { name: 'Priya', username: senderUsername, token: refreshedToken });
@@ -202,7 +180,6 @@ test('QR Lookup & Persistence: normalizes handles, resolves recipients, survives
       name: 'prescription.pdf',
       size: 2048,
       senderName: 'Priya',
-      sendAuthToken: pinData.sendAuthToken,
     });
     assert.equal(dropRes.ok, true);
     assert.ok(dropRes.id);

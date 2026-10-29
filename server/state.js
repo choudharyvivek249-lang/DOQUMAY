@@ -1,5 +1,5 @@
 // Everything lives in memory. Restarting the server wipes all rooms, QR codes and files.
-export const users = new Map();     // socket.id -> { id, name, roomId }
+export const users = new Map();     // socket.id -> { id, name, roomId, createdAt }
 export const qrTokens = new Map();  // token -> { ownerId, expiresAt }
 export const rooms = new Map();     // roomId -> { id, members: [socketId, socketId] }
 export const transfers = new Map(); // transferId -> transfer (see socketHandlers.js)

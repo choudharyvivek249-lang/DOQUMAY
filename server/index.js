@@ -5,14 +5,16 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server } from 'socket.io';
 import { loadAccounts } from './accounts.js';
-import { startCleanup } from './cleanup.js';
+import { startCleanup, startupCleanup } from './cleanup.js';
 import { CLIENT_ORIGIN, PORT } from './config.js';
 import routes from './routes.js';
 import { registerHandlers } from './socketHandlers.js';
 import { initStorage, wipeStorage } from './storage.js';
 
+// ── Startup: clean slate for temporary data, load permanent accounts ──
 await initStorage();
 await loadAccounts();
+await startupCleanup();
 
 const app = express();
 app.disable('x-powered-by');

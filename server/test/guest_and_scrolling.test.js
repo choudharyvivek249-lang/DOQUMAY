@@ -8,10 +8,10 @@ import { io } from 'socket.io-client';
 const PORT = 3062;
 const BASE = `http://localhost:${PORT}`;
 
-test('Guest Sending, Name Validation, Optional Accounts & PIN Enforcement', async () => {
+test('Guest and Registered Sending without PIN, Name Validation & Optional Accounts', async () => {
   const r = Math.floor(100000 + Math.random() * 900000);
   const recipientUsername = `recipient_${r}`;
-  const registeredSender = `pinned_sender_${r}`;
+  const registeredSender = `reg_snd_${r}`;
 
   const srv = spawn('node', [fileURLToPath(new URL('../index.js', import.meta.url))], {
     env: { ...process.env, PORT, STORAGE_DIR: `/tmp/documay-guest-test-${r}` },
@@ -20,15 +20,13 @@ test('Guest Sending, Name Validation, Optional Accounts & PIN Enforcement', asyn
   await once(srv.stdout, 'data');
 
   try {
-    // 1. Register permanent recipient with 4-digit PIN '1234'
+    // 1. Register permanent recipient without PIN
     const regRec = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: recipientUsername,
         password: 'password123',
-        pin: '1234',
-        confirmPin: '1234',
         displayName: 'Amir Khan',
       }),
     });
@@ -36,15 +34,13 @@ test('Guest Sending, Name Validation, Optional Accounts & PIN Enforcement', asyn
     assert.equal(regRec.status, 200);
     assert.equal(recData.ok, true);
 
-    // 2. Register a sender who configured Send PIN protection '5678'
+    // 2. Register a registered sender without PIN
     const regSender = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: registeredSender,
         password: 'password123',
-        pin: '5678',
-        confirmPin: '5678',
         displayName: 'Registered Sender',
       }),
     });
@@ -124,7 +120,7 @@ test('Guest Sending, Name Validation, Optional Accounts & PIN Enforcement', asyn
     assert.equal(guestOffer.ok, true, `Guest offer failed: ${guestOffer.error}`);
     assert.ok(guestOffer.id);
 
-    // Guest streams chunks without needing an account
+    // Guest streams chunks without needing an account or PIN
     const chunkData = new Uint8Array(1024).fill(77);
     const chunkRes = await guestEmit('file:chunk', {
       id: guestOffer.id,
@@ -149,42 +145,32 @@ test('Guest Sending, Name Validation, Optional Accounts & PIN Enforcement', asyn
     const dlBytes = await dlRes.arrayBuffer();
     assert.equal(dlBytes.byteLength, 1024);
 
-    // PRIORITY 4: REGISTERED USERS WITH CONFIGURED PIN CANNOT BYPASS PIN
+    // STEP 5: REGISTERED USERS SEND WITHOUT A PIN
     const regSocket = io(BASE, { transports: ['websocket'] });
     await once(regSocket, 'connect');
     const regSocketEmit = (ev, p = {}) => new Promise((res) => regSocket.emit(ev, p, res));
     await regSocketEmit('session:start', { name: 'Registered Sender', username: registeredSender, token: senderToken });
 
-    // Trying to send without PIN must be rejected
-    const regBypass = await regSocketEmit('drop:offer', {
+    // Registered user sends directly without any PIN check blocking them
+    const regOffer = await regSocketEmit('drop:offer', {
       toUsername: recipientUsername,
       name: 'document.pdf',
       size: 1024,
       senderName: 'Registered Sender',
     });
-    assert.equal(regBypass.ok, false);
-    assert.match(regBypass.error, /Send PIN/i);
+    assert.equal(regOffer.ok, true, `Registered send failed: ${regOffer.error}`);
+    assert.ok(regOffer.id);
 
-    // Correct PIN verification unlocks authorized token
-    const authPin = await regSocketEmit('auth:verify_send_pin', {
-      username: registeredSender,
-      token: senderToken,
-      pin: '5678',
-      recipient: recipientUsername,
-      fileCount: 1,
+    // Stream and complete registered transfer
+    const regChunkRes = await regSocketEmit('file:chunk', {
+      id: regOffer.id,
+      offset: 0,
+      data: chunkData,
     });
-    assert.equal(authPin.ok, true);
-    assert.ok(authPin.sendAuthToken);
+    assert.equal(regChunkRes.ok, true);
 
-    // Send with valid token succeeds
-    const regAuthOffer = await regSocketEmit('drop:offer', {
-      toUsername: recipientUsername,
-      name: 'document.pdf',
-      size: 1024,
-      senderName: 'Registered Sender',
-      sendAuthToken: authPin.sendAuthToken,
-    });
-    assert.equal(regAuthOffer.ok, true);
+    const regCompRes = await regSocketEmit('file:complete', { id: regOffer.id });
+    assert.equal(regCompRes.ok, true);
 
     // Cleanup sockets
     recipientSocket.close();
@@ -194,7 +180,7 @@ test('Guest Sending, Name Validation, Optional Accounts & PIN Enforcement', asyn
     console.log('  ✓ Guest sending without account or PIN passed!');
     console.log('  ✓ Sender name trimmed, validated (1-24 chars), whitespace rejected!');
     console.log('  ✓ Recipient profile resolved via QR lookup, fake accounts rejected!');
-    console.log('  ✓ Registered user 4-digit PIN protection strictly enforced without bypass!');
+    console.log('  ✓ Registered user sending without PIN passed seamlessly!');
   } finally {
     srv.kill('SIGKILL');
   }

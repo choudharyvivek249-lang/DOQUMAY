@@ -6,13 +6,15 @@ const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) :
 export const PORT = num(process.env.PORT, 3001);
 export const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || true; // set to your site in production
 
-// Product rules (env overrides exist only so the automated test can run in seconds)
-export const QR_TTL_MS = num(process.env.QR_TTL_MS, 120 * 1000);            // QR code lives exactly 2 minutes
-export const FILE_TTL_MS = num(process.env.FILE_TTL_MS, 10 * 60 * 1000);    // files are deleted 10 minutes after upload
-export const SWEEP_CRON = process.env.SWEEP_CRON || '*/10 * * * * *';       // cleanup runs every 10 seconds
-export const MAX_FILE_BYTES = 100 * 1024 * 1024;                            // 100 MB per file
+// ──── Data Retention (10-minute maximum for ALL temporary data) ────
+export const QR_TTL_MS = num(process.env.QR_TTL_MS, 120 * 1000);            // Temporary QR token lives 2 minutes
+export const FILE_TTL_MS = num(process.env.FILE_TTL_MS, 10 * 60 * 1000);    // Files deleted 10 minutes after completion
+export const SESSION_TTL_MS = num(process.env.SESSION_TTL_MS, 10 * 60 * 1000); // Guest sessions expire in 10 minutes
+export const CANCEL_RECORD_TTL_MS = 30 * 1000;                               // Cancelled/failed/rejected records kept 30s for UI sync
+export const SWEEP_CRON = process.env.SWEEP_CRON || '*/10 * * * * *';       // Cleanup runs every 10 seconds
 
-// Abuse limits
+// ──── Abuse limits ────
+export const MAX_FILE_BYTES = 100 * 1024 * 1024;                            // 100 MB per file
 export const CHUNK_MAX_BYTES = 1024 * 1024;
 export const MAX_STORE_BYTES = 1024 * 1024 * 1024; // 1 GB of temp files across all rooms
 export const MAX_ACTIVE_PER_USER = 10;

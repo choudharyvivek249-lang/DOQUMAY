@@ -5,7 +5,6 @@ import { useNow } from '../utils/useTick';
 import Avatar from './Avatar';
 import FileCard from './FileCard';
 import { BackIcon, ClipIcon } from './Icons';
-import SendPinModal from './SendPinModal';
 import WhatsAppHandoffModal from './WhatsAppHandoffModal';
 
 export default function TransferRoom({
@@ -15,7 +14,6 @@ export default function TransferRoom({
   onBack,
   onSend,
   onCancel,
-  onVerifySendPin,
   onOpenWhatsApp,
   onOpenAuth,
 }) {
@@ -23,8 +21,6 @@ export default function TransferRoom({
   const fileInput = useRef(null);
   const endRef = useRef(null);
 
-  const [pendingFiles, setPendingFiles] = useState([]);
-  const [showPinModal, setShowPinModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [completedSendFiles, setCompletedSendFiles] = useState([]);
 
@@ -37,33 +33,8 @@ export default function TransferRoom({
     const list = Array.from(e.target.files);
     e.target.value = '';
 
-    if (account) {
-      setPendingFiles(list);
-      setShowPinModal(true);
-      return;
-    }
-
-    // Guest in transfer room: send directly with receiver consent
-    onSend(list, null);
+    onSend(list);
     setCompletedSendFiles(list);
-  };
-
-  const handleVerifyPin = async (pinString) => {
-    const res = await onVerifySendPin(
-      pinString,
-      room.peer?.name || 'peer',
-      pendingFiles.length,
-      `room-${room.id}-${Date.now()}`
-    );
-    if (!res.ok) {
-      return res;
-    }
-
-    setShowPinModal(false);
-    onSend(pendingFiles, res.sendAuthToken);
-    setCompletedSendFiles(pendingFiles);
-    setPendingFiles([]);
-    return { ok: true };
   };
 
   const hasSentFiles = items.some((i) => i.dir === 'out' && (i.status === 'ready' || i.status === 'done'));
@@ -84,7 +55,7 @@ export default function TransferRoom({
         <div className="who">
           <b>Chat &amp; Share with {room.peer?.name}</b>
           <span className={`badge ${room.peerOnline ? 'on' : 'off'}`}>
-            {room.peerOnline ? '🔒 PIN Protected Transfer' : 'Disconnected'}
+            {room.peerOnline ? 'Instant File Transfer' : 'Disconnected'}
           </span>
         </div>
         {onOpenWhatsApp && (
@@ -101,7 +72,7 @@ export default function TransferRoom({
 
       <div className="list" aria-live="polite">
         <div className="wa-encryption-notice">
-          🛡️ 4-Digit Send PIN Protected · End-to-end streamed directly between your devices.
+          Direct &amp; Private · End-to-end streamed directly between your devices.
         </div>
 
         {hasSentFiles && (
@@ -120,7 +91,7 @@ export default function TransferRoom({
               <b>Connected with {room.peer?.name}!</b>
             </p>
             <p>
-              Both devices can send photos, PDFs, and documents. Every send requires your 4-digit Send PIN. Tap the button below to send a file!
+              Both devices can send photos, PDFs, and documents. Tap the button below to send a file!
             </p>
           </div>
         )}
@@ -141,28 +112,8 @@ export default function TransferRoom({
           <ClipIcon width={22} height={22} />
           {room.peerOnline ? `Send a file to ${room.peer?.name}` : 'Scan again to reconnect'}
         </motion.button>
-        <p className="fine">Photos, PDF, Word, Excel, PowerPoint · Secured by 4-digit PIN</p>
+        <p className="fine">Photos, PDF, Word, Excel, PowerPoint · Direct &amp; Private</p>
       </footer>
-
-      {/* 4-Digit Send PIN Verification Screen */}
-      <AnimatePresence>
-        {showPinModal && (
-          <SendPinModal
-            recipient={room.peer?.name || 'Partner'}
-            filesCount={pendingFiles.length}
-            totalSize={pendingFiles.reduce((acc, f) => acc + (f.size || 0), 0)}
-            onVerify={handleVerifyPin}
-            onForgotPin={() => {
-              setShowPinModal(false);
-              onOpenAuth?.();
-            }}
-            onClose={() => {
-              setShowPinModal(false);
-              setPendingFiles([]);
-            }}
-          />
-        )}
-      </AnimatePresence>
 
       {/* WhatsApp Sharing Handoff Modal */}
       <AnimatePresence>
